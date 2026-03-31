@@ -9,9 +9,22 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
-// Middleware
+// CORS: allow localhost dev and deployment origin(s)
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.ALLOWED_ORIGIN,
+    'http://localhost:3000',
+    'https://mindtrack-pqvu.onrender.com'
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error(`CORS policy violation: origin ${origin} not allowed`));
+        }
+    },
     credentials: true
 }));
 app.use(bodyParser.json({ limit: '10mb' }));

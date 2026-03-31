@@ -1,5 +1,7 @@
 // Professional Authentication
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+    ? `${window.location.origin}/api`
+    : 'http://localhost:3000/api';
 
 document.addEventListener('DOMContentLoaded', function() {
     setupPasswordToggle();
