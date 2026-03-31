@@ -49,7 +49,17 @@ app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
         timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
+        environment: process.env.NODE_ENV || 'development',
+        port: PORT
+    });
+});
+
+// Endpoint para informar a porta atual ao frontend
+app.get('/api/config', (req, res) => {
+    res.json({
+        apiUrl: `http://localhost:${PORT}`,
+        port: PORT,
+        version: '1.0.0'
     });
 });
 
@@ -490,12 +500,36 @@ app.delete('/api/goals/:id', verifyToken, (req, res) => {
 // ============================================
 
 app.get('/api/feedback', verifyToken, requireRole(['manager']), (req, res) => {
-    db.all(`
-        SELECT id, content, date
-        FROM feedback
-        ORDER BY date DESC
-        LIMIT 50
-    `, [], (err, rows) => {
+    const { limit = 50, offset = 0, status, fromDate, toDate } = req.query;
+
+    let query = 'SELECT id, content, date, status, response FROM feedback';
+    const params = [];
+    const filters = [];
+
+    if (status && ['unread', 'read', 'responded'].includes(status)) {
+        filters.push('status = ?');
+        params.push(status);
+    }
+
+    if (fromDate) {
+        filters.push('date >= ?');
+        params.push(fromDate);
+    }
+
+    if (toDate) {
+        filters.push('date <= ?');
+        params.push(toDate);
+    }
+
+    if (filters.length) {
+        query += ' WHERE ' + filters.join(' AND ');
+    }
+
+    query += ' ORDER BY date DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit, 10));
+    params.push(parseInt(offset, 10));
+
+    db.all(query, params, (err, rows) => {
         if (err) {
             return res.status(500).json({
                 error: 'Erro ao buscar feedback',
@@ -519,9 +553,9 @@ app.post('/api/feedback', (req, res) => {
     const date = new Date().toISOString();
 
     db.run(`
-        INSERT INTO feedback (content, date)
-        VALUES (?, ?)
-    `, [content, date], function(err) {
+        INSERT INTO feedback (content, date, status)
+        VALUES (?, ?, ?)
+    `, [content, date, 'unread'], function(err) {
         if (err) {
             return res.status(500).json({
                 error: 'Erro ao salvar feedback',
@@ -532,9 +566,78 @@ app.post('/api/feedback', (req, res) => {
         res.status(201).json({
             id: this.lastID,
             content,
-            date
+            date,
+            status: 'unread'
         });
     });
+});
+
+app.put('/api/feedback/:id/status', verifyToken, requireRole(['manager']), (req, res) => {
+    const feedbackId = req.params.id;
+    const { status } = req.body;
+
+    if (!['unread', 'read', 'responded'].includes(status)) {
+        return res.status(400).json({
+            error: 'Status inválido',
+            code: 'INVALID_STATUS'
+        });
+    }
+
+    db.run(
+        'UPDATE feedback SET status = ? WHERE id = ?',
+        [status, feedbackId],
+        function(err) {
+            if (err) {
+                return res.status(500).json({
+                    error: 'Erro ao atualizar status',
+                    code: 'INTERNAL_ERROR'
+                });
+            }
+
+            if (this.changes === 0) {
+                return res.status(404).json({
+                    error: 'Feedback não encontrado',
+                    code: 'FEEDBACK_NOT_FOUND'
+                });
+            }
+
+            res.json({ message: 'Status atualizado', id: feedbackId, status });
+        }
+    );
+});
+
+app.put('/api/feedback/:id/respond', verifyToken, requireRole(['manager']), (req, res) => {
+    const feedbackId = req.params.id;
+    const { response } = req.body;
+
+    if (!response?.trim()) {
+        return res.status(400).json({
+            error: 'Resposta é obrigatória',
+            code: 'MISSING_RESPONSE'
+        });
+    }
+
+    db.run(
+        'UPDATE feedback SET response = ?, status = ? WHERE id = ?',
+        [response.trim(), 'responded', feedbackId],
+        function(err) {
+            if (err) {
+                return res.status(500).json({
+                    error: 'Erro ao responder feedback',
+                    code: 'INTERNAL_ERROR'
+                });
+            }
+
+            if (this.changes === 0) {
+                return res.status(404).json({
+                    error: 'Feedback não encontrado',
+                    code: 'FEEDBACK_NOT_FOUND'
+                });
+            }
+
+            res.json({ message: 'Feedback respondido', id: feedbackId, response: response.trim() });
+        }
+    );
 });
 
 // ============================================
@@ -652,12 +755,18 @@ app.use((err, req, res, next) => {
 // START SERVER
 // ============================================
 
+let activePort = PORT;
+
 const startServer = (port) => {
     const server = app.listen(port, () => {
+        activePort = port;
         console.log(`\n🚀 MindTrack server running on port ${port}`);
         console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
         console.log(`🔗 Health check: http://localhost:${port}/api/health`);
         console.log(`🌐 Frontend: http://localhost:${port}\n`);
+        
+        // Atualiza a variável global da porta
+        process.env.ACTIVE_PORT = port;
     }).on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
             console.log(`⚠️  Port ${port} is busy, trying port ${port + 1}...`);
@@ -683,3 +792,6 @@ process.on('SIGINT', () => {
         process.exit(0);
     });
 });
+
+// Exportar a porta ativa para uso em outros módulos
+module.exports = { app, getPort: () => activePort };

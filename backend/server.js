@@ -17,7 +17,7 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Security headers
+// Headers de segurança
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -25,17 +25,17 @@ app.use((req, res, next) => {
     next();
 });
 
-// Request logging middleware
+// Middleware de logging de requisições
 app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] ${req.method} ${req.path} - IP: ${req.ip}`);
     next();
 });
 
-// Static files
+// Arquivos estáticos
 app.use(express.static('../frontend'));
 
-// JWT verification middleware
+// Middleware de verificação de token JWT
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -62,7 +62,7 @@ const verifyToken = (req, res, next) => {
     });
 };
 
-// Role-based access control
+// Controle de acesso baseado em papel (role-based access control)
 const requireRole = (roles) => {
     return (req, res, next) => {
         if (!roles.includes(req.userType)) {
@@ -75,9 +75,9 @@ const requireRole = (roles) => {
     };
 };
 
-// API Routes
+// ROTAS DA API
 
-// Health check
+// Verificação de saúde do servidor
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
@@ -86,12 +86,12 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Register (admin only in production)
+// Registrar novo usuário (apenas admin em produção)
 app.post('/api/register', async (req, res) => {
     try {
         const { name, email, password, type } = req.body;
 
-        // Validation
+        // Validação
         if (!name || !email || !password || !type) {
             return res.status(400).json({
                 error: 'Todos os campos são obrigatórios',
@@ -129,7 +129,6 @@ app.post('/api/register', async (req, res) => {
                     throw err;
                 }
 
-                // Log user creation
                 console.log(`Novo usuário criado: ${name} (${email}) - Tipo: ${type}`);
 
                 res.status(201).json({
@@ -178,7 +177,7 @@ app.post('/api/login', async (req, res) => {
                     });
                 }
 
-                // Get password hash
+                // Buscar a senha hash
                 db.get('SELECT password FROM users WHERE id = ?', [user.id], async (err, userWithPassword) => {
                     if (err || !userWithPassword) {
                         return res.status(500).json({
@@ -196,7 +195,7 @@ app.post('/api/login', async (req, res) => {
                         });
                     }
 
-                    // Generate JWT
+                    // Gerar token JWT
                     const token = jwt.sign(
                         {
                             id: user.id,
@@ -208,7 +207,6 @@ app.post('/api/login', async (req, res) => {
                         { expiresIn: '24h' }
                     );
 
-                    // Log successful login
                     console.log(`Login bem-sucedido: ${user.name} (${user.email})`);
 
                     res.json({
@@ -232,7 +230,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Get user profile
+// Obter perfil do usuário
 app.get('/api/profile', verifyToken, (req, res) => {
     db.get(
         'SELECT id, name, email, type FROM users WHERE id = ?',
@@ -257,7 +255,7 @@ app.get('/api/profile', verifyToken, (req, res) => {
     );
 });
 
-// Emotions routes
+// Rotas de Emoções
 app.get('/api/emotions', verifyToken, (req, res) => {
     const { limit = 50, offset = 0 } = req.query;
 
@@ -280,7 +278,7 @@ app.post('/api/emotions', verifyToken, (req, res) => {
     const { mood, comment } = req.body;
     const date = new Date().toISOString().split('T')[0];
 
-    // Validation
+    // Validação
     const validMoods = ['happy', 'good', 'neutral', 'stressed', 'overloaded'];
     if (!validMoods.includes(mood)) {
         return res.status(400).json({
@@ -310,7 +308,7 @@ app.post('/api/emotions', verifyToken, (req, res) => {
     );
 });
 
-// Team emotions (manager only)
+// Emoções da equipe (apenas para gerentes)
 app.get('/api/team-emotions', verifyToken, requireRole(['manager']), (req, res) => {
     const { days = 30 } = req.query;
     const dateLimit = new Date();
@@ -335,11 +333,11 @@ app.get('/api/team-emotions', verifyToken, requireRole(['manager']), (req, res) 
     );
 });
 
-// Get member details (emotions, goals, etc.)
+// Obter detalhes de um membro da equipe (emoções, metas, etc.)
 app.get('/api/member/:id', verifyToken, requireRole(['manager']), (req, res) => {
     const memberId = req.params.id;
 
-    // Get member info and emotions
+    // Buscar informações do membro e emoções
     db.all(`
         SELECT u.name, u.email, u.type, e.mood, e.comment, e.date
         FROM users u
@@ -361,7 +359,7 @@ app.get('/api/member/:id', verifyToken, requireRole(['manager']), (req, res) => 
             });
         }
 
-        // Get member goals
+        // Buscar metas do membro
         db.all(`
             SELECT objective, progress
             FROM goals
@@ -393,7 +391,7 @@ app.get('/api/member/:id', verifyToken, requireRole(['manager']), (req, res) => 
     });
 });
 
-// Goals routes
+// Rotas de Metas
 app.get('/api/goals', verifyToken, (req, res) => {
     db.all(
         'SELECT id, objective, progress FROM goals WHERE user_id = ? ORDER BY id DESC',
@@ -504,7 +502,7 @@ app.delete('/api/goals/:id', verifyToken, (req, res) => {
     );
 });
 
-// Feedback routes
+// Rotas de Feedback (ANÔNIMO)
 app.post('/api/feedback', (req, res) => {
     const { content } = req.body;
 
@@ -518,8 +516,8 @@ app.post('/api/feedback', (req, res) => {
     const date = new Date().toISOString();
 
     db.run(
-        'INSERT INTO feedback (content, date) VALUES (?, ?)',
-        [content.trim(), date],
+        'INSERT INTO feedback (content, date, status) VALUES (?, ?, ?)',
+        [content.trim(), date, 'unread'],
         function(err) {
             if (err) {
                 return res.status(500).json({
@@ -538,27 +536,138 @@ app.post('/api/feedback', (req, res) => {
     );
 });
 
+// Listar feedbacks (apenas para gerentes)
 app.get('/api/feedback', verifyToken, requireRole(['manager']), (req, res) => {
-    const { limit = 20, offset = 0 } = req.query;
+    const { limit = 50, offset = 0, status, fromDate, toDate } = req.query;
 
-    db.all(
-        'SELECT id, content, date FROM feedback ORDER BY date DESC LIMIT ? OFFSET ?',
-        [parseInt(limit), parseInt(offset)],
-        (err, rows) => {
+    let query = 'SELECT id, content, date, status, response FROM feedback';
+    const params = [];
+    const filters = [];
+
+    if (status && ['unread', 'read', 'responded'].includes(status)) {
+        filters.push('status = ?');
+        params.push(status);
+    }
+
+    if (fromDate) {
+        filters.push('date >= ?');
+        params.push(fromDate);
+    }
+
+    if (toDate) {
+        filters.push('date <= ?');
+        params.push(toDate);
+    }
+
+    if (filters.length) {
+        query += ' WHERE ' + filters.join(' AND ');
+    }
+
+    query += ' ORDER BY date DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit, 10));
+    params.push(parseInt(offset, 10));
+
+    db.all(query, params, (err, rows) => {
+        if (err) {
+            return res.status(500).json({
+                error: 'Erro ao buscar feedbacks',
+                code: 'INTERNAL_ERROR'
+            });
+        }
+        res.json(rows || []);
+    });
+});
+
+// ATUALIZAR STATUS DO FEEDBACK (Marcar como lido/não lido/respondido)
+app.put('/api/feedback/:id/status', verifyToken, requireRole(['manager']), (req, res) => {
+    const feedbackId = req.params.id;
+    const { status } = req.body;
+
+    // Validar status
+    if (!['unread', 'read', 'responded'].includes(status)) {
+        return res.status(400).json({
+            error: 'Status inválido. Use: unread, read ou responded',
+            code: 'INVALID_STATUS'
+        });
+    }
+
+    db.run(
+        'UPDATE feedback SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [status, feedbackId],
+        function(err) {
             if (err) {
+                console.error('Erro ao atualizar status do feedback:', err);
                 return res.status(500).json({
-                    error: 'Erro ao buscar feedbacks',
+                    error: 'Erro ao atualizar status do feedback',
                     code: 'INTERNAL_ERROR'
                 });
             }
-            res.json(rows);
+
+            if (this.changes === 0) {
+                return res.status(404).json({
+                    error: 'Feedback não encontrado',
+                    code: 'FEEDBACK_NOT_FOUND'
+                });
+            }
+
+            console.log(`Feedback ${feedbackId} atualizado para status: ${status}`);
+
+            res.json({ 
+                message: 'Status atualizado com sucesso', 
+                id: feedbackId, 
+                status 
+            });
         }
     );
 });
 
-// Analytics routes (manager only)
+// RESPONDER FEEDBACK
+app.put('/api/feedback/:id/respond', verifyToken, requireRole(['manager']), (req, res) => {
+    const feedbackId = req.params.id;
+    const { response } = req.body;
+
+    // Validar resposta
+    if (!response?.trim()) {
+        return res.status(400).json({
+            error: 'Resposta é obrigatória',
+            code: 'MISSING_RESPONSE'
+        });
+    }
+
+    // Atualizar feedback com resposta e marcar como respondido
+    db.run(
+        'UPDATE feedback SET response = ?, status = ?, responded_by = ?, responded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [response.trim(), 'responded', req.userId, feedbackId],
+        function(err) {
+            if (err) {
+                console.error('Erro ao responder feedback:', err);
+                return res.status(500).json({
+                    error: 'Erro ao responder feedback',
+                    code: 'INTERNAL_ERROR'
+                });
+            }
+
+            if (this.changes === 0) {
+                return res.status(404).json({
+                    error: 'Feedback não encontrado',
+                    code: 'FEEDBACK_NOT_FOUND'
+                });
+            }
+
+            console.log(`Feedback ${feedbackId} respondido por ${req.user.name || req.userId}`);
+
+            res.json({ 
+                message: 'Feedback respondido com sucesso', 
+                id: feedbackId, 
+                response: response.trim() 
+            });
+        }
+    );
+});
+
+// Rotas de Análise (apenas para gerentes)
 app.get('/api/analytics/overview', verifyToken, requireRole(['manager']), (req, res) => {
-    // Get team overview stats
+    // Obter estatísticas gerais da equipe
     const queries = {
         totalUsers: 'SELECT COUNT(*) as count FROM users',
         totalEmotions: 'SELECT COUNT(*) as count FROM emotions',
@@ -612,7 +721,7 @@ function handleAnalyticsError(err, res) {
     });
 }
 
-// Error handling middleware
+// Middleware de tratamento de erros
 app.use((err, req, res, next) => {
     console.error('Erro não tratado:', err);
     res.status(500).json({
@@ -621,7 +730,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 404 handler
+// Handler para rotas não encontradas (404)
 app.use((req, res) => {
     res.status(404).json({
         error: 'Rota não encontrada',
@@ -629,21 +738,27 @@ app.use((req, res) => {
     });
 });
 
-// Graceful shutdown
+// Encerramento gracioso do servidor
 process.on('SIGINT', () => {
     console.log('Encerrando servidor...');
     db.close((err) => {
         if (err) {
             console.error('Erro ao fechar banco de dados:', err);
         } else {
-            console.log('Banco de dados fechado.');
+            console.log('Banco de dados fechado com sucesso.');
         }
         process.exit(0);
     });
 });
 
+// Iniciar servidor
 app.listen(PORT, () => {
-    console.log(`🚀 MindTrack Server rodando na porta ${PORT}`);
+    console.log(`🚀 Servidor MindTrack rodando na porta ${PORT}`);
     console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔒 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
+    console.log(`🔒 JWT Secret configurado: ${JWT_SECRET ? 'Sim' : 'Não'}`);
+    console.log(`📝 Feedback endpoints disponíveis:`);
+    console.log(`   - POST   /api/feedback         (Enviar feedback anônimo)`);
+    console.log(`   - GET    /api/feedback         (Listar feedbacks - gerente)`);
+    console.log(`   - PUT    /api/feedback/:id/status  (Atualizar status - gerente)`);
+    console.log(`   - PUT    /api/feedback/:id/respond (Responder feedback - gerente)`);
 });

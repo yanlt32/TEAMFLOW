@@ -1,9 +1,67 @@
 // MindTrack Professional Dashboard
-const API_BASE = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
-    ? `${window.location.origin}/api`
-    : 'http://localhost:3000/api';
+// Detecta automaticamente a porta correta do servidor
+const getApiBase = () => {
+    // Se estiver em produção (servidor servindo os arquivos)
+    if (window.location.protocol !== 'file:') {
+        return `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api`;
+    }
+    
+    // Se estiver abrindo o arquivo diretamente, tenta as portas comuns
+    const possiblePorts = [3002, 3001, 3000];
+    
+    // Função para testar porta
+    const testPort = async (port) => {
+        try {
+            const response = await fetch(`http://localhost:${port}/api/health`);
+            if (response.ok) {
+                return `http://localhost:${port}/api`;
+            }
+        } catch (e) {
+            return null;
+        }
+        return null;
+    };
+    
+    // Retorna uma Promise que resolve com a URL correta
+    return (async () => {
+        for (const port of possiblePorts) {
+            const url = await testPort(port);
+            if (url) return url;
+        }
+        return 'http://localhost:3002/api'; // fallback
+    })();
+};
+
+// Inicialização
+let API_BASE = 'http://localhost:3002/api'; // valor temporário
 const token = localStorage.getItem('token');
 const user = JSON.parse(localStorage.getItem('user'));
+
+// Aguarda a detecção da porta
+(async function initApiBase() {
+    API_BASE = await getApiBase();
+    console.log('✅ API configurada para:', API_BASE);
+    
+    // Recarrega a seção atual se necessário
+    const activeSection = document.querySelector('.section:not(.hidden)')?.id;
+    if (activeSection) {
+        const sectionName = activeSection.replace('Section', '');
+        switch(sectionName) {
+            case 'feedback':
+                loadFeedback();
+                break;
+            case 'dashboard':
+                loadDashboard();
+                break;
+            case 'history':
+                loadHistory();
+                break;
+            case 'goals':
+                loadGoals();
+                break;
+        }
+    }
+})();
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -65,6 +123,11 @@ function setupEventListeners() {
 
     // Feedback
     document.getElementById('submitFeedback').addEventListener('click', submitFeedback);
+
+    const applyFiltersButton = document.getElementById('applyFilters');
+    if (applyFiltersButton) {
+        applyFiltersButton.addEventListener('click', loadFeedback);
+    }
 }
 
 function updateUserInfo() {
@@ -94,6 +157,9 @@ function showSection(sectionName) {
             case 'goals':
                 loadGoals();
                 break;
+            case 'feedback':
+                loadFeedback();
+                break;
         }
     }
 }
@@ -116,7 +182,7 @@ async function loadDashboard() {
         createMoodChart(emotions);
 
         // Load recent activity
-        loadRecentActivity(emotions.slice(0, 10)); // Show more for aggregation
+        loadRecentActivity(emotions.slice(0, 10));
 
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
@@ -130,13 +196,13 @@ async function updateDashboardStats(emotions) {
     document.getElementById('todayMood').textContent = todayEmotion ?
         getMoodEmoji(todayEmotion.mood) : '--';
 
-    // Week average (simplified)
+    // Week average
     const weekEmotions = emotions.slice(0, 7);
     const avg = weekEmotions.length > 0 ?
         Math.round(weekEmotions.reduce((sum, e) => sum + getMoodScore(e.mood), 0) / weekEmotions.length) : 0;
     document.getElementById('weekAverage').textContent = avg > 0 ? `${avg}/5` : '--';
 
-    // Streak (simplified)
+    // Streak
     let streak = 0;
     for (let i = 0; i < emotions.length; i++) {
         if (emotions[i].mood !== 'stressed' && emotions[i].mood !== 'overloaded') {
@@ -165,12 +231,10 @@ async function updateDashboardStats(emotions) {
 function createWeeklyChart(emotions) {
     const ctx = document.getElementById('weeklyChart').getContext('2d');
 
-    // Destroy existing chart if it exists
     if (window.weeklyChart instanceof Chart) {
         window.weeklyChart.destroy();
     }
 
-    // Get last 7 days
     const last7Days = [];
     for (let i = 6; i >= 0; i--) {
         const date = new Date();
@@ -222,7 +286,6 @@ function createWeeklyChart(emotions) {
 function createMoodChart(emotions) {
     const ctx = document.getElementById('moodChart').getContext('2d');
 
-    // Destroy existing chart if it exists
     if (window.moodChart instanceof Chart) {
         window.moodChart.destroy();
     }
@@ -239,11 +302,11 @@ function createMoodChart(emotions) {
             datasets: [{
                 data: Object.values(moodCounts),
                 backgroundColor: [
-                    '#10b981', // happy
-                    '#84cc16', // good
-                    '#6b7280', // neutral
-                    '#f59e0b', // stressed
-                    '#ef4444'  // overloaded
+                    '#10b981',
+                    '#84cc16',
+                    '#6b7280',
+                    '#f59e0b',
+                    '#ef4444'
                 ]
             }]
         },
@@ -267,7 +330,6 @@ function loadRecentActivity(emotions) {
         return;
     }
 
-    // Aggregate moods by type
     const moodCounts = {};
     emotions.forEach(emotion => {
         moodCounts[emotion.mood] = (moodCounts[emotion.mood] || 0) + 1;
@@ -434,13 +496,15 @@ async function updateGoalProgress(id, progress) {
             body: JSON.stringify({ progress: parseInt(progress) })
         });
         showAlert('Progresso atualizado!', 'success');
-        loadGoals(); // Reload goals to show updated progress
+        loadGoals();
     } catch (error) {
         showAlert('Erro ao atualizar progresso', 'danger');
     }
 }
 
-// Feedback Functions
+// Feedback functions
+let feedbackItems = [];
+
 async function submitFeedback() {
     const content = document.getElementById('feedbackText').value;
     if (!content.trim()) {
@@ -458,9 +522,258 @@ async function submitFeedback() {
         if (response.ok) {
             document.getElementById('feedbackText').value = '';
             showAlert('Feedback enviado anonimamente!', 'success');
+        } else {
+            const errorBody = await response.json();
+            showAlert(errorBody.error || 'Erro ao enviar feedback', 'danger');
         }
     } catch (error) {
         showAlert('Erro ao enviar feedback', 'danger');
+    }
+}
+
+async function loadFeedback() {
+    const isManager = user && user.type === 'manager';
+    const managerSection = document.getElementById('managerFeedback');
+    const employeeSection = document.getElementById('employeeFeedback');
+    const subtitle = document.getElementById('feedbackSubtitle');
+
+    if (!isManager) {
+        if (managerSection) managerSection.classList.add('hidden');
+        if (employeeSection) employeeSection.classList.remove('hidden');
+        if (subtitle) subtitle.textContent = 'Compartilhe suas sugestões de forma segura e anônima';
+        return;
+    }
+
+    if (managerSection) managerSection.classList.remove('hidden');
+    if (employeeSection) employeeSection.classList.add('hidden');
+    if (subtitle) subtitle.textContent = 'Gerencie feedbacks da equipe com estatísticas e filtros';
+
+    try {
+        const response = await fetch(`${API_BASE}/feedback`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+            throw new Error('Falha ao carregar feedbacks');
+        }
+
+        feedbackItems = await response.json();
+        updateFeedbackStats(feedbackItems);
+        renderFeedbackList();
+
+        const filterButton = document.getElementById('applyFilters');
+        if (filterButton) {
+            filterButton.onclick = loadFeedback;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar feedback:', error);
+        showAlert('Erro ao carregar feedback', 'danger');
+    }
+}
+
+function filterFeedbackItems() {
+    const statusFilter = document.getElementById('feedbackStatusFilter').value;
+    const dateFilter = document.getElementById('feedbackDateFilter').value;
+
+    const now = new Date();
+    return feedbackItems.filter(item => {
+        let statusMatch = true;
+        let dateMatch = true;
+
+        if (statusFilter && statusFilter !== 'all') {
+            statusMatch = item.status === statusFilter;
+        }
+
+        if (dateFilter && dateFilter !== 'all') {
+            const itemDate = new Date(item.date);
+            let periodStart = new Date(now);
+
+            switch (dateFilter) {
+                case 'today':
+                    periodStart.setHours(0, 0, 0, 0);
+                    break;
+                case 'week':
+                    periodStart.setDate(now.getDate() - 6);
+                    periodStart.setHours(0, 0, 0, 0);
+                    break;
+                case 'month':
+                    periodStart.setMonth(now.getMonth() - 1);
+                    periodStart.setHours(0, 0, 0, 0);
+                    break;
+                case 'quarter':
+                    periodStart.setMonth(now.getMonth() - 3);
+                    periodStart.setHours(0, 0, 0, 0);
+                    break;
+                default:
+                    periodStart = new Date(0);
+            }
+
+            dateMatch = itemDate >= periodStart && itemDate <= now;
+        }
+
+        return statusMatch && dateMatch;
+    });
+}
+
+function updateFeedbackStats(items) {
+    const total = items.length;
+    const unread = items.filter(item => item.status === 'unread').length;
+    const responded = items.filter(item => item.status === 'responded').length;
+    const now = new Date();
+    const thisMonth = items.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate.getFullYear() === now.getFullYear() && itemDate.getMonth() === now.getMonth();
+    }).length;
+
+    document.getElementById('totalFeedback').textContent = total;
+    document.getElementById('unreadFeedback').textContent = unread;
+    document.getElementById('thisMonthFeedback').textContent = thisMonth;
+    document.getElementById('respondedFeedback').textContent = responded;
+}
+
+function renderFeedbackList() {
+    const container = document.getElementById('feedbackList');
+    const noData = document.getElementById('noFeedbackMessage');
+    const filteredItems = filterFeedbackItems();
+
+    if (!container || !noData) return;
+
+    if (filteredItems.length === 0) {
+        container.innerHTML = '';
+        noData.classList.remove('hidden');
+        return;
+    }
+
+    noData.classList.add('hidden');
+    container.innerHTML = filteredItems.map(item => {
+        const itemStatus = item.status || 'unread';
+        const statusBadge = itemStatus === 'unread' ? 'Não lido' : itemStatus === 'responded' ? 'Respondido' : 'Lido';
+        const statusClass = itemStatus === 'unread' ? 'status-unread' : itemStatus === 'responded' ? 'status-responded' : 'status-read';
+
+        return `
+            <div class="feedback-item ${itemStatus === 'unread' ? 'unread' : itemStatus === 'responded' ? 'responded' : ''}" data-id="${item.id}">
+                <div class="feedback-header">
+                    <div class="feedback-date">${formatDate(item.date)}</div>
+                    <div class="feedback-status">
+                        <div class="status-badge ${statusClass}">${statusBadge}</div>
+                    </div>
+                </div>
+                <div class="feedback-content">${item.content}</div>
+                ${item.response ? `<div class="feedback-content"><strong>Resposta:</strong> ${item.response}</div>` : ''}
+                <div class="feedback-actions">
+                    <button class="btn-feedback-action btn-mark-read" data-id="${item.id}" data-status="${itemStatus === 'unread' ? 'read' : 'unread'}">
+                        <i class="fas fa-envelope-open"></i>
+                        ${itemStatus === 'unread' ? 'Marcar como lido' : 'Marcar como não lido'}
+                    </button>
+                    <button class="btn-feedback-action btn-respond" data-id="${item.id}">
+                        <i class="fas fa-reply"></i>
+                        ${itemStatus === 'responded' ? 'Atualizar resposta' : 'Responder'}
+                    </button>
+                </div>
+                <div class="response-form" id="responseForm-${item.id}" style="display:none;">
+                    <textarea class="response-textarea" id="responseText-${item.id}" placeholder="Digite sua resposta..."></textarea>
+                    <div class="response-actions">
+                        <button class="btn btn-primary btn-send-response" data-id="${item.id}">Enviar Resposta</button>
+                        <button class="btn btn-secondary btn-cancel-response" data-id="${item.id}">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    attachFeedbackHandlers();
+}
+
+function attachFeedbackHandlers() {
+    document.querySelectorAll('.btn-mark-read').forEach(button => {
+        button.addEventListener('click', async () => {
+            const feedbackId = button.getAttribute('data-id');
+            const newStatus = button.getAttribute('data-status');
+            await setFeedbackStatus(feedbackId, newStatus);
+            await loadFeedback();
+        });
+    });
+
+    document.querySelectorAll('.btn-respond').forEach(button => {
+        button.addEventListener('click', () => {
+            const feedbackId = button.getAttribute('data-id');
+            const form = document.getElementById(`responseForm-${feedbackId}`);
+            if (form) {
+                form.style.display = form.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+    });
+
+    document.querySelectorAll('.btn-cancel-response').forEach(button => {
+        button.addEventListener('click', () => {
+            const feedbackId = button.getAttribute('data-id');
+            const form = document.getElementById(`responseForm-${feedbackId}`);
+            if (form) {
+                form.style.display = 'none';
+            }
+        });
+    });
+
+    document.querySelectorAll('.btn-send-response').forEach(button => {
+        button.addEventListener('click', async () => {
+            const feedbackId = button.getAttribute('data-id');
+            const textarea = document.getElementById(`responseText-${feedbackId}`);
+            const responseText = textarea?.value || '';
+
+            if (!responseText.trim()) {
+                showAlert('Digite uma resposta antes de enviar', 'warning');
+                return;
+            }
+
+            await respondFeedback(feedbackId, responseText.trim());
+            await loadFeedback();
+        });
+    });
+}
+
+async function setFeedbackStatus(id, status) {
+    try {
+        const response = await fetch(`${API_BASE}/feedback/${id}/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status })
+        });
+
+        if (!response.ok) {
+            throw new Error('Falha ao atualizar status de feedback');
+        }
+
+        showAlert('Status de feedback atualizado', 'success');
+    } catch (error) {
+        console.error(error);
+        showAlert('Erro ao atualizar status de feedback', 'danger');
+        throw error;
+    }
+}
+
+async function respondFeedback(id, responseText) {
+    try {
+        const response = await fetch(`${API_BASE}/feedback/${id}/respond`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ response: responseText })
+        });
+
+        if (!response.ok) {
+            throw new Error('Falha ao responder feedback');
+        }
+
+        showAlert('Resposta enviada com sucesso', 'success');
+    } catch (error) {
+        console.error(error);
+        showAlert('Erro ao enviar resposta para feedback', 'danger');
+        throw error;
     }
 }
 
@@ -516,6 +829,5 @@ function formatDate(dateString) {
 }
 
 function showAlert(message, type = 'info') {
-    // Simple alert implementation
     alert(message);
 }

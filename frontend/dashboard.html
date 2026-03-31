@@ -252,11 +252,12 @@
             <!-- Feedback Section -->
             <section id="feedbackSection" class="section hidden">
                 <div class="page-header">
-                    <h1 class="page-title">Feedback Anônimo</h1>
-                    <p class="page-subtitle">Compartilhe suas sugestões de forma segura e anônima</p>
+                    <h1 class="page-title">Feedback</h1>
+                    <p class="page-subtitle" id="feedbackSubtitle">Compartilhe suas sugestões de forma segura e anônima</p>
                 </div>
 
-                <div class="card">
+                <!-- Employee Feedback Form -->
+                <div id="employeeFeedback" class="card">
                     <div class="card-content">
                         <div class="form-group">
                             <label class="form-label">Sua Mensagem</label>
@@ -272,12 +273,107 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- Manager Feedback Management -->
+                <div id="managerFeedback" class="hidden">
+                    <!-- Feedback Statistics -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-envelope"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="totalFeedback">0</div>
+                                <div class="stat-label">Total de Feedbacks</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-envelope-open"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="unreadFeedback">0</div>
+                                <div class="stat-label">Não Lidos</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-calendar-alt"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="thisMonthFeedback">0</div>
+                                <div class="stat-label">Este Mês</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-reply"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-number" id="respondedFeedback">0</div>
+                                <div class="stat-label">Respondidos</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Feedback Filters -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Filtros</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="filter-row">
+                                <div class="form-group">
+                                    <label class="form-label">Status</label>
+                                    <select class="form-select" id="feedbackStatusFilter">
+                                        <option value="all">Todos</option>
+                                        <option value="unread">Não Lidos</option>
+                                        <option value="read">Lidos</option>
+                                        <option value="responded">Respondidos</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Período</label>
+                                    <select class="form-select" id="feedbackDateFilter">
+                                        <option value="all">Todos</option>
+                                        <option value="today">Hoje</option>
+                                        <option value="week">Esta Semana</option>
+                                        <option value="month">Este Mês</option>
+                                        <option value="quarter">Últimos 3 Meses</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <button class="btn btn-secondary" id="applyFilters">
+                                        <i class="fas fa-filter"></i>
+                                        Aplicar Filtros
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Feedback List -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Feedbacks Recebidos</h3>
+                        </div>
+                        <div class="card-content">
+                            <div id="feedbackList" class="feedback-list">
+                                <!-- Feedback items will be loaded here -->
+                            </div>
+                            <div id="noFeedbackMessage" class="no-data">
+                                <i class="fas fa-inbox"></i>
+                                <p>Nenhum feedback encontrado</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             </section>
         </div>
     </main>
-
+    <script src="config.js"></script>
     <script src="js/dashboard.js"></script>
 </body>
 </html>
