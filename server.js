@@ -30,6 +30,40 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Auto-seed default users in production if table empty
+const seedUsers = async () => {
+    db.get('SELECT COUNT(*) as count FROM users', async (err, row) => {
+        if (err) {
+            console.error('Seed check error:', err);
+            return;
+        }
+
+        if (row.count === 0) {
+            try {
+                const managerPassword = await bcrypt.hash('admin123', 12);
+                const employeePassword = await bcrypt.hash('user123', 12);
+
+                db.run(`INSERT OR IGNORE INTO users (name, email, password, type) VALUES (?, ?, ?, ?), (?, ?, ?, ?), (?, ?, ?, ?), (?, ?, ?, ?)`,
+                    ['Administrador', 'admin@mindtrack.com', managerPassword, 'manager',
+                     'João Silva', 'joao@empresa.com', employeePassword, 'employee',
+                     'Maria Santos', 'maria@empresa.com', employeePassword, 'employee',
+                     'Pedro Costa', 'pedro@empresa.com', employeePassword, 'employee'],
+                    (insertErr) => {
+                        if (insertErr) {
+                            console.error('Error seeding users:', insertErr);
+                        } else {
+                            console.log('✅ Usuários de seed criados (fallback).');
+                        }
+                    });
+            } catch (hashError) {
+                console.error('Error hashing initial passwords:', hashError);
+            }
+        }
+    });
+};
+
+seedUsers();
+
 // Security headers
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
