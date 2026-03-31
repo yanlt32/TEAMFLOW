@@ -60,7 +60,8 @@ Para produção real, migre para PostgreSQL seguindo o guia em `RENDER_DEPLOY_GU
 - **Erro 404**: Verifique se Root Directory está vazio (raiz)
 - **Build falha**: Verifique se package.json tem todas dependências
 - **App não inicia**: Verifique logs no Render dashboard
+- **SQLITE_CANTOPEN**: Corrigido - banco agora usa /tmp no Render
 
 ---
-**🎉 Agora vai funcionar!** O problema era que o Render esperava os arquivos na raiz do projeto.</content>
+**🎉 Agora vai funcionar!** Todas as correções foram aplicadas.</content>
 <parameter name="filePath">c:\Users\ladei\Desktop\database.sql\TEAMFLOW\QUICK_DEPLOY.md
