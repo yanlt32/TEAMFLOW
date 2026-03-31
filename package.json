@@ -2,17 +2,17 @@
   "name": "mindtrack-backend",
   "version": "1.0.0",
   "description": "Backend API for MindTrack emotional tracking and well-being management system",
-  "main": "server-prod.js",
+  "main": "server.js",
   "author": "MindTrack Team",
   "license": "MIT",
   "engines": {
     "node": ">=16.0.0"
   },
   "scripts": {
-    "start": "node server-prod.js",
-    "dev": "node server-prod.js",
+    "start": "node server.js",
+    "dev": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint server-prod.js",
+    "lint": "eslint server.js",
     "format": "prettier --write server-prod.js",
     "setup": "node setup.js",
     "seed": "node seed.js"
