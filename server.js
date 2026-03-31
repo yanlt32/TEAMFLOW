@@ -253,7 +253,7 @@ app.post('/api/emotions', verifyToken, (req, res) => {
         });
     }
 
-    const date = new Date().toISOString().split('T')[0];
+    const date = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD format in local timezone
 
     db.run(`
         INSERT INTO emotions (user_id, mood, comment, date)

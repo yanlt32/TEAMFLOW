@@ -111,23 +111,23 @@ async function loadDashboard() {
         const emotions = await fetchEmotions();
 
         // Update stats
-        updateDashboardStats(emotions);
+        await updateDashboardStats(emotions);
 
         // Create charts
         createWeeklyChart(emotions);
         createMoodChart(emotions);
 
         // Load recent activity
-        loadRecentActivity(emotions.slice(0, 5));
+        loadRecentActivity(emotions.slice(0, 10)); // Show more for aggregation
 
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
     }
 }
 
-function updateDashboardStats(emotions) {
+async function updateDashboardStats(emotions) {
     // Today mood
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('sv-SE');
     const todayEmotion = emotions.find(e => e.date === today);
     document.getElementById('todayMood').textContent = todayEmotion ?
         getMoodEmoji(todayEmotion.mood) : '--';
@@ -148,6 +148,21 @@ function updateDashboardStats(emotions) {
         }
     }
     document.getElementById('streakCount').textContent = streak;
+
+    // Goals progress
+    try {
+        const goalsResponse = await fetch(`${API_BASE}/goals`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const goals = await goalsResponse.json();
+        const avgProgress = goals.length > 0 ?
+            Math.round(goals.reduce((sum, g) => sum + g.progress, 0) / goals.length) : 0;
+        document.getElementById('goalsProgress').textContent = `${avgProgress}%`;
+    } catch (error) {
+        console.error('Erro ao carregar progresso das metas:', error);
+        document.getElementById('goalsProgress').textContent = '--%';
+    }
+}
 
     // Goals progress (placeholder)
     document.getElementById('goalsProgress').textContent = '75%';
@@ -258,14 +273,25 @@ function loadRecentActivity(emotions) {
         return;
     }
 
-    container.innerHTML = emotions.map(emotion => `
+    // Aggregate moods by type
+    const moodCounts = {};
+    emotions.forEach(emotion => {
+        moodCounts[emotion.mood] = (moodCounts[emotion.mood] || 0) + 1;
+    });
+
+    const moodOrder = ['happy', 'good', 'neutral', 'stressed', 'overloaded'];
+    const aggregated = moodOrder.filter(mood => moodCounts[mood]).map(mood => ({
+        mood,
+        count: moodCounts[mood]
+    }));
+
+    container.innerHTML = aggregated.map(item => `
         <div class="emotion-entry">
-            <div class="emotion-date">${formatDate(emotion.date)}</div>
             <div class="emotion-mood">
-                <span class="mood-emoji">${getMoodEmoji(emotion.mood)}</span>
-                <span>${getMoodLabel(emotion.mood)}</span>
+                <span class="mood-emoji">${getMoodEmoji(item.mood)}</span>
+                <span>${getMoodLabel(item.mood)}</span>
+                <span class="mood-count">(${item.count})</span>
             </div>
-            ${emotion.comment ? `<div class="emotion-comment">${emotion.comment}</div>` : ''}
         </div>
     `).join('');
 }
@@ -414,6 +440,7 @@ async function updateGoalProgress(id, progress) {
             body: JSON.stringify({ progress: parseInt(progress) })
         });
         showAlert('Progresso atualizado!', 'success');
+        loadGoals(); // Reload goals to show updated progress
     } catch (error) {
         showAlert('Erro ao atualizar progresso', 'danger');
     }
@@ -443,6 +470,52 @@ async function submitFeedback() {
     }
 }
 
+async function loadFeedback() {
+    if (user.type !== 'manager') return;
+
+    try {
+        const response = await fetch(`${API_BASE}/feedback`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const feedback = await response.json();
+
+        const container = document.getElementById('feedbackList') || createFeedbackContainer();
+        if (feedback.length === 0) {
+            container.innerHTML = '<p class="text-center">Nenhum feedback recebido</p>';
+            return;
+        }
+
+        container.innerHTML = feedback.map(item => `
+            <div class="emotion-entry">
+                <div class="emotion-date">${formatDate(item.date.split('T')[0])}</div>
+                <div class="emotion-comment">${item.content}</div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Erro ao carregar feedback:', error);
+    }
+}
+
+function createFeedbackContainer() {
+    // Add feedback display to team section
+    const teamSection = document.getElementById('teamSection');
+    const feedbackCard = document.createElement('div');
+    feedbackCard.className = 'card';
+    feedbackCard.innerHTML = `
+        <div class="card-header">
+            <h3 class="card-title">Feedback Anônimo</h3>
+            <p class="card-subtitle">Mensagens recebidas da equipe</p>
+        </div>
+        <div class="card-content">
+            <div id="feedbackList" class="emotion-timeline">
+                <!-- Feedback will be loaded here -->
+            </div>
+        </div>
+    `;
+    teamSection.appendChild(feedbackCard);
+    return document.getElementById('feedbackList');
+}
+
 // Team Dashboard (Manager Only)
 async function loadTeamDashboard() {
     if (user.type !== 'manager') return;
@@ -454,7 +527,7 @@ async function loadTeamDashboard() {
         const emotions = await response.json();
 
         // Update team stats
-        updateTeamStats(emotions);
+        await updateTeamStats(emotions);
 
         // Create team chart
         createTeamChart(emotions);
@@ -465,12 +538,15 @@ async function loadTeamDashboard() {
         // Load team members
         loadTeamMembers(emotions);
 
+        // Load feedback for managers
+        loadFeedback();
+
     } catch (error) {
         console.error('Erro ao carregar dashboard da equipe:', error);
     }
 }
 
-function updateTeamStats(emotions) {
+async function updateTeamStats(emotions) {
     const uniqueUsers = [...new Set(emotions.map(e => e.user_id))];
     document.getElementById('teamSize').textContent = uniqueUsers.length;
 
@@ -489,8 +565,17 @@ function updateTeamStats(emotions) {
     );
     document.getElementById('alertsCount').textContent = new Set(recentStress.map(e => e.user_id)).size;
 
-    // Feedback count (placeholder)
-    document.getElementById('feedbackCount').textContent = '12';
+    // Load actual feedback count
+    try {
+        const feedbackResponse = await fetch(`${API_BASE}/feedback`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const feedback = await feedbackResponse.json();
+        document.getElementById('feedbackCount').textContent = feedback.length;
+    } catch (error) {
+        console.error('Erro ao carregar feedback count:', error);
+        document.getElementById('feedbackCount').textContent = '0';
+    }
 }
 
 function createTeamChart(emotions) {
