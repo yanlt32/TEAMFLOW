@@ -22,7 +22,7 @@ git push origin main
 ### 3. Configurar o serviço
 - **Runtime**: `Node.js`
 - **Build Command**: `npm install`
-- **Start Command**: `npm start`
+- **Start Command**: `npm start` (ou `node server.js`)
 - **Root Directory**: `` (vazio - usar raiz do projeto)
 
 ### 4. Adicionar variáveis de ambiente
