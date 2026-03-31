@@ -2,6 +2,10 @@
 
 ## ⚡ Deploy Simples (SQLite - Para Teste/Demo)
 
+### ✅ PRÉ-REQUISITOS
+- Conta no [Render](https://render.com)
+- Repositório no GitHub/GitLab (já feito!)
+
 ### 1. Preparar o código
 ```bash
 # Commit das mudanças
@@ -19,7 +23,7 @@ git push origin main
 - **Runtime**: `Node.js`
 - **Build Command**: `npm install`
 - **Start Command**: `npm start`
-- **Root Directory**: `backend` (importante!)
+- **Root Directory**: `` (vazio - usar raiz do projeto)
 
 ### 4. Adicionar variáveis de ambiente
 ```
@@ -53,10 +57,10 @@ Após o deploy, use:
 Para produção real, migre para PostgreSQL seguindo o guia em `RENDER_DEPLOY_GUIDE.md`
 
 ## 🐛 Problemas Comuns
-- **Erro 404**: Verifique se Root Directory está como `backend`
+- **Erro 404**: Verifique se Root Directory está vazio (raiz)
 - **Build falha**: Verifique se package.json tem todas dependências
 - **App não inicia**: Verifique logs no Render dashboard
 
 ---
-**🎉 Pronto!** Seu MindTrack estará no ar em alguns minutos!</content>
+**🎉 Agora vai funcionar!** O problema era que o Render esperava os arquivos na raiz do projeto.</content>
 <parameter name="filePath">c:\Users\ladei\Desktop\database.sql\TEAMFLOW\QUICK_DEPLOY.md
