@@ -1,0 +1,52 @@
+{
+  "name": "mindtrack-backend",
+  "version": "1.0.0",
+  "description": "Backend API for MindTrack emotional tracking and well-being management system",
+  "main": "server.js",
+  "author": "MindTrack Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint server.js",
+    "format": "prettier --write server.js",
+    "setup": "node setup.js",
+    "seed": "node seed.js"
+  },
+  "keywords": [
+    "emotional-tracking",
+    "well-being",
+    "corporate-health",
+    "api",
+    "express",
+    "sqlite"
+  ],
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "eslint": "^8.55.0",
+    "nodemon": "^3.0.1",
+    "prettier": "^3.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/mindtrack-backend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/mindtrack-backend/issues"
+  },
+  "homepage": "https://github.com/your-org/mindtrack-backend#readme"
+}

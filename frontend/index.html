@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindTrack - Controle Emocional Profissional</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo-section">
+                    <i class="fas fa-brain logo-icon"></i>
+                    <h1>MindTrack</h1>
+                </div>
+                <p class="login-subtitle">Sistema Profissional de Controle Emocional</p>
+                <p class="login-description">
+                    Monitore o bem-estar emocional da sua equipe, previna o estresse e promova
+                    um ambiente de trabalho saudável e produtivo.
+                </p>
+            </div>
+
+            <div class="login-features">
+                <div class="feature">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboards Analíticos</span>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-users"></i>
+                    <span>Gestão de Equipe</span>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Feedback Anônimo</span>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-bullseye"></i>
+                    <span>Metas de Desenvolvimento</span>
+                </div>
+            </div>
+
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label class="form-label" for="email">
+                        <i class="fas fa-envelope"></i>
+                        Email Corporativo
+                    </label>
+                    <input
+                        type="email"
+                        id="email"
+                        class="form-input"
+                        placeholder="seu.email@empresa.com"
+                        required
+                        autocomplete="email"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">
+                        <i class="fas fa-lock"></i>
+                        Senha
+                    </label>
+                    <div class="password-input-container">
+                        <input
+                            type="password"
+                            id="password"
+                            class="form-input"
+                            placeholder="Digite sua senha"
+                            required
+                            autocomplete="current-password"
+                        >
+                        <button type="button" class="password-toggle" id="passwordToggle">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Entrar no Sistema
+                </button>
+            </form>
+
+            <div id="error" class="alert alert-danger hidden">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="errorMessage"></span>
+            </div>
+
+            <div class="login-footer">
+                <p>
+                    <i class="fas fa-info-circle"></i>
+                    Sistema em conformidade com NR-1 e melhores práticas de gestão de pessoas
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+</body>
+</html>

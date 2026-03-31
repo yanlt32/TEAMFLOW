@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindTrack - Controle Emocional Profissional</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <a href="#" class="logo">MindTrack</a>
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <span id="userName">Usuário</span>
+                    <button class="logout-btn" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt"></i> Sair
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a href="#" class="nav-link active" data-section="dashboard">
+                    <i class="fas fa-chart-line nav-icon"></i>
+                    Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="checkin">
+                    <i class="fas fa-smile nav-icon"></i>
+                    Check-in Diário
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="history">
+                    <i class="fas fa-history nav-icon"></i>
+                    Histórico
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="goals">
+                    <i class="fas fa-bullseye nav-icon"></i>
+                    Metas PDI
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="feedback">
+                    <i class="fas fa-comments nav-icon"></i>
+                    Feedback
+                </a>
+            </li>
+            <li class="nav-item" id="teamNav">
+                <a href="#" class="nav-link" data-section="team">
+                    <i class="fas fa-users nav-icon"></i>
+                    Equipe
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="reports">
+                    <i class="fas fa-file-alt nav-icon"></i>
+                    Relatórios
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Dashboard Section -->
+            <section id="dashboardSection" class="section fade-in">
+                <div class="page-header">
+                    <h1 class="page-title">Dashboard</h1>
+                    <p class="page-subtitle">Visão geral do seu bem-estar emocional</p>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="todayMood">--</div>
+                        <div class="stat-label">Humor Hoje</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="weekAverage">--</div>
+                        <div class="stat-label">Média da Semana</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="streakCount">--</div>
+                        <div class="stat-label">Dias Consecutivos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="goalsProgress">--%</div>
+                        <div class="stat-label">Progresso Metas</div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="grid grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Evolução Semanal</h3>
+                            <p class="card-subtitle">Seu humor nos últimos 7 dias</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="chart-container">
+                                <canvas id="weeklyChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Distribuição de Humor</h3>
+                            <p class="card-subtitle">Frequência dos estados emocionais</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="chart-container">
+                                <canvas id="moodChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Atividade Recente</h3>
+                        <p class="card-subtitle">Seus últimos registros emocionais</p>
+                    </div>
+                    <div class="card-content">
+                        <div id="recentActivity" class="emotion-timeline">
+                            <!-- Recent emotions will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Check-in Section -->
+            <section id="checkinSection" class="section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Check-in Diário</h1>
+                    <p class="page-subtitle">Como você está se sentindo hoje?</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-content">
+                        <div class="mood-selector">
+                            <div class="mood-option" data-mood="happy">
+                                <div class="mood-emoji">😄</div>
+                                <div class="mood-label">Feliz</div>
+                            </div>
+                            <div class="mood-option" data-mood="good">
+                                <div class="mood-emoji">🙂</div>
+                                <div class="mood-label">Bem</div>
+                            </div>
+                            <div class="mood-option" data-mood="neutral">
+                                <div class="mood-emoji">😐</div>
+                                <div class="mood-label">Neutro</div>
+                            </div>
+                            <div class="mood-option" data-mood="stressed">
+                                <div class="mood-emoji">😞</div>
+                                <div class="mood-label">Estressado</div>
+                            </div>
+                            <div class="mood-option" data-mood="overloaded">
+                                <div class="mood-emoji">😡</div>
+                                <div class="mood-label">Sobrecarregado</div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Comentário (opcional)</label>
+                            <textarea class="form-textarea" id="comment" placeholder="Conte-nos mais sobre como você está se sentindo..."></textarea>
+                        </div>
+
+                        <button class="btn btn-primary" id="submitMood">
+                            <i class="fas fa-paper-plane"></i>
+                            Registrar Humor
+                        </button>
+
+                        <div id="suggestion" class="alert alert-success hidden">
+                            <i class="fas fa-lightbulb"></i>
+                            <span id="suggestionText"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Section -->
+            <section id="historySection" class="section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Histórico Emocional</h1>
+                    <p class="page-subtitle">Acompanhe sua evolução emocional ao longo do tempo</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Linha do Tempo</h3>
+                        <p class="card-subtitle">Todos os seus registros organizados por data</p>
+                    </div>
+                    <div class="card-content">
+                        <div id="historyList" class="emotion-timeline">
+                            <!-- History will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Goals Section -->
+            <section id="goalsSection" class="section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Metas de Desenvolvimento</h1>
+                    <p class="page-subtitle">Defina e acompanhe suas metas pessoais de crescimento</p>
+                </div>
+
+                <div class="grid grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Nova Meta</h3>
+                            <p class="card-subtitle">Defina um novo objetivo de desenvolvimento</p>
+                        </div>
+                        <div class="card-content">
+                            <form id="goalForm">
+                                <div class="form-group">
+                                    <label class="form-label">Objetivo</label>
+                                    <input type="text" class="form-input" id="goalInput" placeholder="Ex: Melhorar comunicação em reuniões" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i>
+                                    Adicionar Meta
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Suas Metas</h3>
+                            <p class="card-subtitle">Acompanhe o progresso dos seus objetivos</p>
+                        </div>
+                        <div class="card-content">
+                            <div id="goalsList" class="goals-list">
+                                <!-- Goals will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Feedback Section -->
+            <section id="feedbackSection" class="section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Feedback Anônimo</h1>
+                    <p class="page-subtitle">Compartilhe suas sugestões de forma segura e anônima</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-content">
+                        <div class="form-group">
+                            <label class="form-label">Sua Mensagem</label>
+                            <textarea class="form-textarea" id="feedbackText" placeholder="Digite seu feedback aqui..." required></textarea>
+                        </div>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>Este feedback será enviado de forma completamente anônima</span>
+                        </div>
+                        <button class="btn btn-primary" id="submitFeedback">
+                            <i class="fas fa-paper-plane"></i>
+                            Enviar Feedback
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Team Dashboard (Manager Only) -->
+            <section id="teamSection" class="section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Dashboard da Equipe</h1>
+                    <p class="page-subtitle">Visão geral do bem-estar emocional da sua equipe</p>
+                </div>
+
+                <!-- Team Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="teamSize">--</div>
+                        <div class="stat-label">Membros da Equipe</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="teamAverage">--</div>
+                        <div class="stat-label">Média Geral</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="alertsCount">--</div>
+                        <div class="stat-label">Alertas Ativos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="feedbackCount">--</div>
+                        <div class="stat-label">Feedbacks Recebidos</div>
+                    </div>
+                </div>
+
+                <!-- Team Charts -->
+                <div class="grid grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Estado da Equipe</h3>
+                            <p class="card-subtitle">Distribuição emocional atual</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="chart-container">
+                                <canvas id="teamChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Alertas de Saúde Mental</h3>
+                            <p class="card-subtitle">Colaboradores que precisam de atenção</p>
+                        </div>
+                        <div class="card-content">
+                            <div id="alertsList">
+                                <!-- Alerts will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Team Members -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Membros da Equipe</h3>
+                        <p class="card-subtitle">Estado emocional individual</p>
+                    </div>
+                    <div class="card-content">
+                        <div id="teamMembers" class="emotion-timeline">
+                            <!-- Team members will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section id="reportsSection" class="section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Relatórios</h1>
+                    <p class="page-subtitle">Análises detalhadas e insights sobre o bem-estar</p>
+                </div>
+
+                <div class="grid grid-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Relatório Semanal</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>Análise completa da semana com tendências e recomendações.</p>
+                            <button class="btn btn-outline">Gerar Relatório</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Relatório Mensal</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>Visão mensal do bem-estar emocional da equipe.</p>
+                            <button class="btn btn-outline">Gerar Relatório</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Relatório de Feedback</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>Compilação de todos os feedbacks anônimos recebidos.</p>
+                            <button class="btn btn-outline">Gerar Relatório</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
