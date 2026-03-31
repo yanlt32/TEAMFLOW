@@ -1,7 +1,17 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
-const dbPath = path.join(__dirname, './database/mindtrack.db');
+// Use /tmp for Render deployment, ./database for local development
+const isProduction = process.env.NODE_ENV === 'production';
+const dbDir = isProduction ? '/tmp' : path.join(__dirname, './database');
+const dbPath = path.join(dbDir, 'mindtrack.db');
+
+// Ensure database directory exists
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new sqlite3.Database(dbPath);
 
 // Create tables
