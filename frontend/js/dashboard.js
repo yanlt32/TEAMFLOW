@@ -21,9 +21,15 @@ function initializeApp() {
     updateUserInfo();
     loadDashboard();
 
-    // Show team nav for managers
+    // Show team nav for managers only
     if (user.type === 'manager') {
         document.getElementById('teamNav').style.display = 'block';
+    } else {
+        // Hide team nav for employees
+        const teamNavItem = document.getElementById('teamNav');
+        if (teamNavItem) {
+            teamNavItem.style.display = 'none';
+        }
     }
 }
 
@@ -162,10 +168,6 @@ async function updateDashboardStats(emotions) {
         console.error('Erro ao carregar progresso das metas:', error);
         document.getElementById('goalsProgress').textContent = '--%';
     }
-}
-
-    // Goals progress (placeholder)
-    document.getElementById('goalsProgress').textContent = '75%';
 }
 
 function createWeeklyChart(emotions) {

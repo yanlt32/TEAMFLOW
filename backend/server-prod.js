@@ -3,6 +3,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const path = require('path');
 const db = require('./database');
 
 const app = express();
@@ -32,8 +33,16 @@ app.use((req, res, next) => {
     next();
 });
 
-// Static files
-app.use(express.static('./frontend'));
+// ============================================
+// STATIC FILES SERVING - FIXED
+// ============================================
+// Serve static files from frontend folder
+const frontendPath = path.join(__dirname, '../frontend');
+app.use(express.static(frontendPath));
+
+// ============================================
+// API ROUTES (must come BEFORE catch-all route)
+// ============================================
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -81,7 +90,65 @@ const requireRole = (roles) => {
     };
 };
 
-// Auth routes
+// ============================================
+// AUTH ROUTES
+// ============================================
+
+// Register endpoint
+app.post('/api/register', async (req, res) => {
+    try {
+        const { name, email, password, type } = req.body;
+
+        if (!name || !email || !password || !type) {
+            return res.status(400).json({
+                error: 'Todos os campos são obrigatórios',
+                code: 'MISSING_FIELDS'
+            });
+        }
+
+        if (!['employee', 'manager'].includes(type)) {
+            return res.status(400).json({
+                error: 'Tipo de usuário inválido',
+                code: 'INVALID_USER_TYPE'
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        db.run(
+            'INSERT INTO users (name, email, password, type) VALUES (?, ?, ?, ?)',
+            [name, email.toLowerCase(), hashedPassword, type],
+            function(err) {
+                if (err) {
+                    if (err.message.includes('UNIQUE constraint failed')) {
+                        return res.status(409).json({
+                            error: 'Email já cadastrado',
+                            code: 'EMAIL_EXISTS'
+                        });
+                    }
+                    console.error('Register error:', err);
+                    return res.status(500).json({
+                        error: 'Erro ao registrar usuário',
+                        code: 'INTERNAL_ERROR'
+                    });
+                }
+
+                res.status(201).json({
+                    id: this.lastID,
+                    message: 'Usuário criado com sucesso'
+                });
+            }
+        );
+    } catch (error) {
+        console.error('Register error:', error);
+        res.status(500).json({
+            error: 'Erro interno do servidor',
+            code: 'INTERNAL_ERROR'
+        });
+    }
+});
+
+// Login endpoint
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -93,9 +160,9 @@ app.post('/api/login', async (req, res) => {
             });
         }
 
-        // Find user
-        db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
+        db.get('SELECT * FROM users WHERE email = ?', [email.toLowerCase()], async (err, user) => {
             if (err) {
+                console.error('Login query error:', err);
                 return res.status(500).json({
                     error: 'Erro interno do servidor',
                     code: 'INTERNAL_ERROR'
@@ -109,7 +176,6 @@ app.post('/api/login', async (req, res) => {
                 });
             }
 
-            // Check password
             const isValidPassword = await bcrypt.compare(password, user.password);
             if (!isValidPassword) {
                 return res.status(401).json({
@@ -118,7 +184,6 @@ app.post('/api/login', async (req, res) => {
                 });
             }
 
-            // Generate JWT
             const token = jwt.sign(
                 {
                     id: user.id,
@@ -170,7 +235,10 @@ app.get('/api/profile', verifyToken, (req, res) => {
     });
 });
 
-// Emotions routes
+// ============================================
+// EMOTIONS ROUTES
+// ============================================
+
 app.get('/api/emotions', verifyToken, (req, res) => {
     db.all(`
         SELECT id, mood, comment, date
@@ -256,7 +324,6 @@ app.get('/api/team-emotions', verifyToken, requireRole(['manager']), (req, res) 
 app.get('/api/member/:id', verifyToken, requireRole(['manager']), (req, res) => {
     const memberId = req.params.id;
 
-    // Get member info and emotions
     db.all(`
         SELECT u.name, u.email, u.type, e.mood, e.comment, e.date
         FROM users u
@@ -278,7 +345,6 @@ app.get('/api/member/:id', verifyToken, requireRole(['manager']), (req, res) => 
             });
         }
 
-        // Get member goals
         db.all(`
             SELECT objective, progress
             FROM goals
@@ -302,7 +368,7 @@ app.get('/api/member/:id', verifyToken, requireRole(['manager']), (req, res) => 
                     comment: row.comment,
                     date: row.date
                 })),
-                goals: goals
+                goals: goals || []
             };
 
             res.json(member);
@@ -310,7 +376,10 @@ app.get('/api/member/:id', verifyToken, requireRole(['manager']), (req, res) => 
     });
 });
 
-// Goals routes
+// ============================================
+// GOALS ROUTES
+// ============================================
+
 app.get('/api/goals', verifyToken, (req, res) => {
     db.all(`
         SELECT id, objective, progress
@@ -324,7 +393,7 @@ app.get('/api/goals', verifyToken, (req, res) => {
                 code: 'INTERNAL_ERROR'
             });
         }
-        res.json(rows);
+        res.json(rows || []);
     });
 });
 
@@ -391,12 +460,41 @@ app.put('/api/goals/:id', verifyToken, (req, res) => {
     });
 });
 
-// Feedback routes (anonymous)
+app.delete('/api/goals/:id', verifyToken, (req, res) => {
+    const goalId = req.params.id;
+
+    db.run(`
+        DELETE FROM goals
+        WHERE id = ? AND user_id = ?
+    `, [goalId, req.user.id], function(err) {
+        if (err) {
+            return res.status(500).json({
+                error: 'Erro ao deletar meta',
+                code: 'INTERNAL_ERROR'
+            });
+        }
+
+        if (this.changes === 0) {
+            return res.status(404).json({
+                error: 'Meta não encontrada',
+                code: 'GOAL_NOT_FOUND'
+            });
+        }
+
+        res.json({ message: 'Meta removida com sucesso' });
+    });
+});
+
+// ============================================
+// FEEDBACK ROUTES
+// ============================================
+
 app.get('/api/feedback', verifyToken, requireRole(['manager']), (req, res) => {
     db.all(`
         SELECT id, content, date
         FROM feedback
         ORDER BY date DESC
+        LIMIT 50
     `, [], (err, rows) => {
         if (err) {
             return res.status(500).json({
@@ -404,7 +502,7 @@ app.get('/api/feedback', verifyToken, requireRole(['manager']), (req, res) => {
                 code: 'INTERNAL_ERROR'
             });
         }
-        res.json(rows);
+        res.json(rows || []);
     });
 });
 
@@ -439,9 +537,11 @@ app.post('/api/feedback', (req, res) => {
     });
 });
 
-// Analytics overview (manager only)
+// ============================================
+// ANALYTICS ROUTES
+// ============================================
+
 app.get('/api/analytics/overview', verifyToken, requireRole(['manager']), (req, res) => {
-    // Get total users
     db.get('SELECT COUNT(*) as total FROM users', [], (err, userCount) => {
         if (err) {
             return res.status(500).json({
@@ -450,7 +550,6 @@ app.get('/api/analytics/overview', verifyToken, requireRole(['manager']), (req, 
             });
         }
 
-        // Get emotions in last 30 days
         const dateLimit = new Date();
         dateLimit.setDate(dateLimit.getDate() - 30);
 
@@ -467,7 +566,6 @@ app.get('/api/analytics/overview', verifyToken, requireRole(['manager']), (req, 
                 });
             }
 
-            // Get recent feedback
             db.all(`
                 SELECT content, date
                 FROM feedback
@@ -483,15 +581,65 @@ app.get('/api/analytics/overview', verifyToken, requireRole(['manager']), (req, 
 
                 res.json({
                     totalUsers: userCount.total,
-                    moodStats,
-                    recentFeedback: feedback
+                    moodStats: moodStats || [],
+                    recentFeedback: feedback || []
                 });
             });
         });
     });
 });
 
-// Error handling middleware
+// ============================================
+// TEAM MEMBERS LIST (manager only)
+// ============================================
+
+app.get('/api/team-members', verifyToken, requireRole(['manager']), (req, res) => {
+    db.all(`
+        SELECT id, name, email, type
+        FROM users
+        WHERE type = 'employee'
+        ORDER BY name
+    `, [], (err, rows) => {
+        if (err) {
+            return res.status(500).json({
+                error: 'Erro ao buscar membros da equipe',
+                code: 'INTERNAL_ERROR'
+            });
+        }
+        res.json(rows || []);
+    });
+});
+
+// ============================================
+// ERROR HANDLING
+// ============================================
+
+// API 404 handler - for unmatched API routes
+app.use('/api/*', (req, res) => {
+    res.status(404).json({
+        error: 'Rota não encontrada',
+        code: 'ROUTE_NOT_FOUND'
+    });
+});
+
+// Serve index.html for all non-API routes (SPA support)
+app.get('*', (req, res) => {
+    // Check if the request is for an API route (already handled above)
+    if (req.path.startsWith('/api/')) {
+        return;
+    }
+    
+    // Serve index.html for all other routes
+    const indexPath = path.join(frontendPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+        if (err) {
+            console.error('Error serving index.html:', err);
+            res.status(500).send('Error loading application');
+        }
+    });
+});
+
+// General error handling middleware
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);
     res.status(500).json({
@@ -500,17 +648,38 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({
-        error: 'Rota não encontrada',
-        code: 'ROUTE_NOT_FOUND'
-    });
-});
+// ============================================
+// START SERVER
+// ============================================
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 MindTrack server running on port ${PORT}`);
-    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
+const startServer = (port) => {
+    const server = app.listen(port, () => {
+        console.log(`\n🚀 MindTrack server running on port ${port}`);
+        console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`🔗 Health check: http://localhost:${port}/api/health`);
+        console.log(`🌐 Frontend: http://localhost:${port}\n`);
+    }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.log(`⚠️  Port ${port} is busy, trying port ${port + 1}...`);
+            startServer(port + 1);
+        } else {
+            console.error('Server error:', err);
+            process.exit(1);
+        }
+    });
+};
+
+startServer(PORT);
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    console.log('\n📴 Shutting down server...');
+    db.close((err) => {
+        if (err) {
+            console.error('Error closing database:', err);
+        } else {
+            console.log('✅ Database closed');
+        }
+        process.exit(0);
+    });
 });
