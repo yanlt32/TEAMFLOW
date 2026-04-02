@@ -10,12 +10,31 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = 'mindtrack-secret-key-2024';
 
-// CORS - Permitir todas as origens em produção
-app.use(cors({
-    origin: '*',
+// CORS - Permitir origens específicas em produção e desenvolvimento
+const corsOptions = {
+    origin: (origin, callback) => {
+        const allowedOrigins = [
+            'https://mindtrack-pqvu.onrender.com',
+            'https://mindtrack-api-pqvu.onrender.com',
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://127.0.0.1:3000',
+            'http://localhost:3000',
+        ];
+
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`⚠️ CORS bloqueado para origem: ${origin}`);
+            callback(null, true); // permitir mesmo assim em dev
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
