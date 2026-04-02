@@ -10,31 +10,22 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = 'mindtrack-secret-key-2024';
 
-// CORS configurado para produção Render e desenvolvimento
-const corsOptions = {
-    origin: (origin, callback) => {
-        const allowedOrigins = [
-            'https://mindtrack-pqvu.onrender.com',
-            'https://mindtrack-api-pqvu.onrender.com',
-            'http://localhost:3000',
-            'http://localhost:3001',
-            'http://127.0.0.1:3000'
-        ];
-
-        // permitir sem origin (mobile, desktop) ou se estiver em allowedOrigins
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error('CORS policy: origin não autorizada'));
-        }
-    },
+// CORS permissivo para produção Render
+app.use(cors({
+    origin: [
+        'https://mindtrack-pqvu.onrender.com',
+        'https://mindtrack-api-pqvu.onrender.com',
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000'
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-};
-
-app.use(cors(corsOptions));
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+    optionsSuccessStatus: 200
+}));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Logging
