@@ -497,6 +497,7 @@ async function updateDashboardStats(emotions) {
         const goalsResponse = await fetch(`${API_BASE}/goals`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (!goalsResponse.ok) throw new Error('Falha ao carregar metas');
         const goals = await goalsResponse.json();
         const avgProgress = goals.length > 0 ?
             Math.round(goals.reduce((sum, g) => sum + g.progress, 0) / goals.length) : 0;
@@ -690,6 +691,7 @@ async function loadGoals() {
         const response = await fetch(`${API_BASE}/goals`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (!response.ok) throw new Error('Falha ao carregar metas');
         const goals = await response.json();
 
         const container = document.getElementById('goalsList');
@@ -870,6 +872,11 @@ async function loadTeamAnalytics() {
         const response = await fetch(`${API_BASE}/team-members`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (!response.ok) {
+            console.error('Erro ao carregar analytics: Falha ao buscar membros', response.status);
+            showAlert('Erro ao carregar análises da equipe', 'danger');
+            return;
+        }
         const members = await response.json();
         let allEmotions = [], completedGoals = 0, activeMembers = 0, totalCheckins = 0;
         const memberMoodData = {};

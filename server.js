@@ -217,6 +217,24 @@ app.get('/api/profile', verifyToken, (req, res) => {
     });
 });
 
+// Team members list (manager only)
+app.get('/api/team-members', verifyToken, requireRole(['manager']), (req, res) => {
+    db.all(
+        'SELECT id, name, email, type FROM users WHERE type = ? ORDER BY name',
+        ['employee'],
+        (err, rows) => {
+            if (err) {
+                console.error('Database error:', err);
+                return res.status(500).json({
+                    error: 'Erro ao buscar membros da equipe',
+                    code: 'INTERNAL_ERROR'
+                });
+            }
+            res.json(rows || []);
+        }
+    );
+});
+
 // Emotions routes
 app.get('/api/emotions', verifyToken, (req, res) => {
     db.all(`
