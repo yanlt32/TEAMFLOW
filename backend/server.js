@@ -10,11 +10,35 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'mindtrack-secret-key-2024';
 
-// Middleware
+// Configuração de CORS para produção
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://127.0.0.1:3000',
+    'https://mindtrack-pvqu.onrender.com',
+    process.env.FRONTEND_URL
+].filter(Boolean);
+
+// CORS middleware configurado corretamente
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://127.0.0.1:3000'],
-    credentials: true
+    origin: function(origin, callback) {
+        // Permitir requisições sem origem (como mobile apps ou curl)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+            callback(null, true);
+        } else {
+            console.log('Origem bloqueada pelo CORS:', origin);
+            callback(null, true); // Em desenvolvimento, permite todas
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// Body parser middleware
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -28,7 +52,7 @@ app.use((req, res, next) => {
 
 // Request logging
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Origin: ${req.headers.origin || 'same-origin'}`);
     next();
 });
 
@@ -71,7 +95,24 @@ const requireRole = (roles) => {
 // HEALTH CHECK
 // ============================================
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString(), version: '1.0.0', port: PORT });
+    res.json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(), 
+        version: '1.0.0', 
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
+
+// Rota de configuração para o frontend
+app.get('/api/config', (req, res) => {
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    res.json({
+        apiUrl: `${baseUrl}/api`,
+        port: PORT,
+        version: '1.0.0',
+        environment: process.env.NODE_ENV || 'development'
+    });
 });
 
 // ============================================
@@ -285,18 +326,8 @@ app.get('/api/feedback', verifyToken, requireRole(['manager']), (req, res) => {
     });
 });
 
-// CORREÇÃO: Rota para usuários verem seus feedbacks
 app.get('/api/feedback/user', verifyToken, (req, res) => {
-    // Usuários comuns veem todos os feedbacks (anônimos) que foram respondidos
     db.all('SELECT id, content, response, date, status FROM feedback WHERE response IS NOT NULL ORDER BY date DESC LIMIT 20', [], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Erro ao buscar feedbacks' });
-        res.json(rows || []);
-    });
-});
-
-// CORREÇÃO: Rota para admin gerenciar feedbacks
-app.get('/api/feedback/all', verifyToken, requireRole(['manager']), (req, res) => {
-    db.all('SELECT id, content, date, status, response FROM feedback ORDER BY date DESC', [], (err, rows) => {
         if (err) return res.status(500).json({ error: 'Erro ao buscar feedbacks' });
         res.json(rows || []);
     });
@@ -351,6 +382,7 @@ app.use('/api/*', (req, res) => {
     res.status(404).json({ error: 'Rota não encontrada', path: req.path });
 });
 
+// Serve frontend
 app.get('*', (req, res) => {
     if (req.path.startsWith('/api/')) return;
     res.sendFile(path.join(frontendPath, 'dashboard.html'), (err) => {
@@ -377,17 +409,6 @@ const startServer = (port) => {
         console.log('👤 Credenciais de teste:');
         console.log('   Admin: admin@mindtrack.com / admin123');
         console.log('   Funcionário: pedro@mindtrack.com / senha123');
-        console.log('\n📡 Rotas disponíveis:');
-        console.log('   POST /api/login');
-        console.log('   GET  /api/emotions');
-        console.log('   POST /api/emotions');
-        console.log('   PUT  /api/emotions/:id');
-        console.log('   DELETE /api/emotions/:id');
-        console.log('   GET  /api/goals');
-        console.log('   POST /api/goals');
-        console.log('   GET  /api/feedback/user');
-        console.log('   GET  /api/feedback (admin)');
-        console.log('   PUT  /api/feedback/:id/respond (admin)\n');
     }).on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
             console.log(`⚠️ Porta ${port} ocupada, tentando porta ${port + 1}...`);

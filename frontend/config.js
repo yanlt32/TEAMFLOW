@@ -2,10 +2,28 @@
 (function() {
     console.log('🔍 Detectando servidor MindTrack...');
     
-    // Lista de portas possíveis para testar
+    // Detectar se está em produção (Render) ou desenvolvimento
+    const isProduction = window.location.hostname !== 'localhost' && 
+                        !window.location.hostname.includes('127.0.0.1');
+    
+    // Em produção, usar a URL atual do servidor
+    if (isProduction) {
+        const API_URL = `${window.location.protocol}//${window.location.hostname}/api`;
+        window.APP_CONFIG = {
+            API_URL: API_URL,
+            PORT: window.location.port || 80,
+            VERSION: '1.0.0'
+        };
+        console.log(`📡 API configurada para (produção): ${API_URL}`);
+        window.dispatchEvent(new CustomEvent('apiConfigLoaded', { 
+            detail: { apiUrl: API_URL } 
+        }));
+        return;
+    }
+    
+    // Em desenvolvimento, testar portas locais
     const possiblePorts = [3000, 3001, 3002, 3003, 3004, 3005];
     
-    // Função para testar se uma porta responde
     async function testPort(port) {
         try {
             const controller = new AbortController();
@@ -28,7 +46,6 @@
         return false;
     }
     
-    // Função principal para descobrir a porta
     async function discoverServerPort() {
         for (const port of possiblePorts) {
             console.log(`🔍 Testando porta ${port}...`);
@@ -43,7 +60,6 @@
         return 3000;
     }
     
-    // Inicialização
     (async function init() {
         const port = await discoverServerPort();
         const API_URL = `http://localhost:${port}/api`;
@@ -56,7 +72,6 @@
         
         console.log(`📡 API configurada para: ${API_URL}`);
         
-        // Disparar evento de configuração carregada
         window.dispatchEvent(new CustomEvent('apiConfigLoaded', { 
             detail: { apiUrl: API_URL } 
         }));
