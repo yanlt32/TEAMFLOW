@@ -11,28 +11,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'mindtrack-secret-key-2024';
 
-// Configuração de CORS para produção
+// Configuração de CORS
 app.use(cors({
-    origin: function(origin, callback) {
-        const allowedOrigins = [
-            'http://localhost:3000',
-            'http://localhost:3001',
-            'http://localhost:3002',
-            'http://127.0.0.1:3000',
-            'https://mindtrack-pqvu.onrender.com',
-            'https://mindtrack-pqvu.onrender.com',
-            null, // Para requisições sem origem
-            undefined
-        ];
-        
-        // Permitir em desenvolvimento
-        if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
-            callback(null, true);
-        } else {
-            console.log(`CORS bloqueado para: ${origin}`);
-            callback(null, true); // Em desenvolvimento, permite todas
-        }
-    },
+    origin: '*', // Permite todas as origens para teste
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
@@ -46,7 +27,6 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Cache-Control', 'no-cache');
     next();
 });
 
@@ -56,18 +36,11 @@ app.use((req, res, next) => {
     next();
 });
 
-// Static files - Serve both frontend and root
+// Static files
 const frontendPath = path.join(__dirname, '../frontend');
-const publicPath = path.join(__dirname, '../public');
-
-// Tentar servir arquivos estáticos de diferentes locais
 if (fs.existsSync(frontendPath)) {
     app.use(express.static(frontendPath));
     console.log(`📁 Servindo arquivos estáticos de: ${frontendPath}`);
-}
-if (fs.existsSync(publicPath)) {
-    app.use(express.static(publicPath));
-    console.log(`📁 Servindo arquivos estáticos de: ${publicPath}`);
 }
 app.use(express.static(path.join(__dirname, '../')));
 
@@ -93,15 +66,6 @@ const verifyToken = (req, res, next) => {
     });
 };
 
-const requireRole = (roles) => {
-    return (req, res, next) => {
-        if (!roles.includes(req.userType)) {
-            return res.status(403).json({ error: 'Acesso negado', code: 'INSUFFICIENT_PERMISSIONS' });
-        }
-        next();
-    };
-};
-
 // ============================================
 // HEALTH CHECK
 // ============================================
@@ -115,52 +79,9 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Rota de configuração
-app.get('/api/config', (req, res) => {
-    const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-    res.json({
-        apiUrl: `${baseUrl}/api`,
-        port: PORT,
-        version: '1.0.0',
-        environment: process.env.NODE_ENV || 'development'
-    });
-});
-
 // ============================================
 // AUTH ROUTES
 // ============================================
-app.post('/api/register', async (req, res) => {
-    try {
-        const { name, email, password, type } = req.body;
-        if (!name || !email || !password || !type) {
-            return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
-        }
-        if (!['employee', 'manager'].includes(type)) {
-            return res.status(400).json({ error: 'Tipo de usuário inválido' });
-        }
-        if (password.length < 6) {
-            return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 12);
-        db.run('INSERT INTO users (name, email, password, type) VALUES (?, ?, ?, ?)',
-            [name.trim(), email.toLowerCase().trim(), hashedPassword, type],
-            function(err) {
-                if (err) {
-                    if (err.message.includes('UNIQUE constraint failed')) {
-                        return res.status(409).json({ error: 'Email já cadastrado' });
-                    }
-                    console.error('Erro no INSERT:', err);
-                    return res.status(500).json({ error: 'Erro ao criar usuário' });
-                }
-                res.status(201).json({ id: this.lastID, message: 'Usuário criado com sucesso' });
-            });
-    } catch (error) {
-        console.error('Erro ao registrar:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
-    }
-});
-
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -189,10 +110,25 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-app.get('/api/profile', verifyToken, (req, res) => {
-    db.get('SELECT id, name, email, type FROM users WHERE id = ?', [req.userId], (err, user) => {
-        if (err || !user) return res.status(404).json({ error: 'Usuário não encontrado' });
-        res.json(user);
+// ============================================
+// TEAM MEMBERS ROUTE - CORRIGIDA
+// ============================================
+app.get('/api/team-members', verifyToken, (req, res) => {
+    console.log(`🔍 Buscando membros da equipe - Usuário: ${req.userId}, Tipo: ${req.userType}`);
+    
+    // Verificar se é manager
+    if (req.userType !== 'manager') {
+        console.log(`❌ Acesso negado: ${req.userType} não é manager`);
+        return res.status(403).json({ error: 'Acesso negado. Apenas gestores podem acessar.' });
+    }
+    
+    db.all('SELECT id, name, email, type FROM users WHERE type = ? ORDER BY name', ['employee'], (err, rows) => {
+        if (err) {
+            console.error('Erro ao buscar membros:', err);
+            return res.status(500).json({ error: 'Erro ao buscar membros da equipe' });
+        }
+        console.log(`✅ ${rows.length} membros da equipe encontrados`);
+        res.json(rows || []);
     });
 });
 
@@ -257,45 +193,8 @@ app.delete('/api/emotions/:id', verifyToken, (req, res) => {
 });
 
 // ============================================
-// TEAM ROUTES (Manager only)
+// MEMBER DETAILS ROUTE
 // ============================================
-
-// Team members list - CORRIGIDO
-app.get('/api/team-members', verifyToken, (req, res) => {
-    // Verificar se é manager
-    if (req.userType !== 'manager') {
-        return res.status(403).json({ error: 'Acesso negado. Apenas gestores podem acessar.' });
-    }
-    
-    db.all('SELECT id, name, email, type FROM users WHERE type = ? ORDER BY name', ['employee'], (err, rows) => {
-        if (err) {
-            console.error('Erro ao buscar membros:', err);
-            return res.status(500).json({ error: 'Erro ao buscar membros da equipe' });
-        }
-        console.log(`✅ ${rows.length} membros da equipe encontrados`);
-        res.json(rows || []);
-    });
-});
-
-// Team emotions (manager only)
-app.get('/api/team-emotions', verifyToken, (req, res) => {
-    if (req.userType !== 'manager') {
-        return res.status(403).json({ error: 'Acesso negado. Apenas gestores podem acessar.' });
-    }
-    
-    const dateLimit = new Date();
-    dateLimit.setDate(dateLimit.getDate() - 30);
-    db.all(`SELECT e.id, e.mood, e.comment, e.date, u.name, u.email FROM emotions e JOIN users u ON e.user_id = u.id WHERE e.date >= ? ORDER BY e.date DESC`,
-        [dateLimit.toISOString().split('T')[0]], (err, rows) => {
-            if (err) {
-                console.error('Erro ao buscar emoções da equipe:', err);
-                return res.status(500).json({ error: 'Erro ao buscar emoções da equipe' });
-            }
-            res.json(rows || []);
-        });
-});
-
-// Get member details (manager only)
 app.get('/api/member/:id', verifyToken, (req, res) => {
     if (req.userType !== 'manager') {
         return res.status(403).json({ error: 'Acesso negado. Apenas gestores podem acessar.' });
@@ -451,20 +350,18 @@ app.put('/api/feedback/:id/respond', verifyToken, (req, res) => {
 });
 
 // ============================================
-// ANALYTICS ROUTES
+// TEAM ANALYTICS ROUTE
 // ============================================
-app.get('/api/analytics/overview', verifyToken, (req, res) => {
+app.get('/api/team-analytics', verifyToken, (req, res) => {
     if (req.userType !== 'manager') {
         return res.status(403).json({ error: 'Acesso negado' });
     }
-    db.get('SELECT COUNT(*) as total FROM users', [], (err, userCount) => {
-        if (err) return res.status(500).json({ error: 'Erro ao buscar analytics' });
-        const dateLimit = new Date();
-        dateLimit.setDate(dateLimit.getDate() - 30);
-        db.all('SELECT mood, COUNT(*) as count FROM emotions WHERE date >= ? GROUP BY mood', [dateLimit.toISOString().split('T')[0]], (err, moodStats) => {
-            if (err) return res.status(500).json({ error: 'Erro ao buscar estatísticas' });
-            db.all('SELECT content, date FROM feedback ORDER BY date DESC LIMIT 5', [], (err, feedback) => {
-                res.json({ totalUsers: userCount.total, moodStats: moodStats || [], recentFeedback: feedback || [] });
+    
+    db.all('SELECT COUNT(*) as total FROM users WHERE type = ?', ['employee'], (err, totalUsers) => {
+        db.all('SELECT mood, COUNT(*) as count FROM emotions GROUP BY mood', [], (err, moodStats) => {
+            res.json({
+                totalEmployees: totalUsers ? totalUsers.total : 0,
+                moodDistribution: moodStats || []
             });
         });
     });
@@ -475,64 +372,45 @@ app.get('/api/analytics/overview', verifyToken, (req, res) => {
 // ============================================
 app.use('/api/*', (req, res) => {
     console.log(`⚠️ Rota não encontrada: ${req.method} ${req.path}`);
-    res.status(404).json({ error: `Rota não encontrada: ${req.path}`, path: req.path });
+    res.status(404).json({ error: `Rota não encontrada: ${req.path}` });
 });
 
-// Serve frontend - IMPORTANTE: deve vir depois das rotas da API
+// Serve frontend
 app.get('*', (req, res) => {
     if (req.path.startsWith('/api/')) return;
     
-    // Tentar servir dashboard.html primeiro, depois index.html
-    const dashboardPath = path.join(frontendPath, 'dashboard.html');
-    const indexPath = path.join(frontendPath, 'index.html');
+    const indexPath = path.join(frontendPath, 'dashboard.html');
+    const loginPath = path.join(frontendPath, 'index.html');
     
-    if (fs.existsSync(dashboardPath)) {
-        res.sendFile(dashboardPath);
-    } else if (fs.existsSync(indexPath)) {
+    if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
+    } else if (fs.existsSync(loginPath)) {
+        res.sendFile(loginPath);
     } else {
         res.status(404).send('Página não encontrada');
     }
 });
 
-app.use((err, req, res, next) => {
-    console.error('Erro não tratado:', err);
-    res.status(500).json({ error: 'Erro interno do servidor' });
-});
-
 // ============================================
 // START SERVER
 // ============================================
-const startServer = (port) => {
-    const server = app.listen(port, () => {
-        console.log(`\n🚀 Servidor MindTrack rodando na porta ${port}`);
-        console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
-        console.log(`🔗 Health check: http://localhost:${port}/api/health`);
-        console.log(`🌐 Frontend: http://localhost:${port}\n`);
-        console.log('👤 Credenciais de teste:');
-        console.log('   Admin: admin@mindtrack.com / admin123');
-        console.log('   Funcionário: pedro@mindtrack.com / senha123');
-        console.log('\n📡 Rotas disponíveis:');
-        console.log('   POST /api/login');
-        console.log('   GET  /api/team-members');
-        console.log('   GET  /api/emotions');
-        console.log('   POST /api/emotions');
-        console.log('   GET  /api/goals');
-        console.log('   POST /api/goals');
-        console.log('   GET  /api/feedback');
-        console.log('   GET  /api/feedback/user\n');
-    }).on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-            console.log(`⚠️ Porta ${port} ocupada, tentando porta ${port + 1}...`);
-            startServer(port + 1);
-        } else {
-            console.error('Erro no servidor:', err);
-            process.exit(1);
-        }
-    });
-};
-
-startServer(PORT);
+app.listen(PORT, () => {
+    console.log(`\n🚀 Servidor MindTrack rodando na porta ${PORT}`);
+    console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`🌐 Frontend: http://localhost:${PORT}\n`);
+    console.log('👤 Credenciais de teste:');
+    console.log('   Admin: admin@mindtrack.com / admin123');
+    console.log('   Funcionário: pedro@mindtrack.com / senha123');
+    console.log('\n📡 Rotas disponíveis:');
+    console.log('   POST /api/login');
+    console.log('   GET  /api/team-members');
+    console.log('   GET  /api/emotions');
+    console.log('   POST /api/emotions');
+    console.log('   GET  /api/goals');
+    console.log('   GET  /api/feedback');
+    console.log('   GET  /api/feedback/user\n');
+});
 
 process.on('SIGINT', () => {
     console.log('\n📴 Encerrando servidor...');
