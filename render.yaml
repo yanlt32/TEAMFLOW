@@ -21,9 +21,9 @@ services:
     buildCommand: echo "No build step required"
     staticPublishPath: ./frontend
     routes:
-      - type: rewrite
+      - type: proxy
         source: /api/*
-        destination: /api/*
+        destination: https://mindtrack-api-pqvu.onrender.com/api/:splat
 
   - type: pserv
     name: mindtrack-db

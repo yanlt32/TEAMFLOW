@@ -6,9 +6,13 @@
     const isProduction = window.location.hostname !== 'localhost' && 
                         !window.location.hostname.includes('127.0.0.1');
     
-    // Em produção, usar a URL atual do servidor
+// Em produção, usar a URL do backend (inferencia + fallback explícito)
     if (isProduction) {
-        const API_URL = `${window.location.protocol}//${window.location.hostname}/api`;
+        const backendHost = window.location.hostname.includes('mindtrack-pqvu')
+            ? 'https://mindtrack-api-pqvu.onrender.com'
+            : `${window.location.protocol}//${window.location.hostname}`;
+
+        const API_URL = `${backendHost}/api`;
         window.APP_CONFIG = {
             API_URL: API_URL,
             PORT: window.location.port || 80,
