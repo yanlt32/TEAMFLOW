@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const fs = require('fs');
 const db = require('./database');
 
 const app = express();
@@ -11,34 +12,32 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'mindtrack-secret-key-2024';
 
 // Configuração de CORS para produção
-const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://127.0.0.1:3000',
-    'https://mindtrack-pvqu.onrender.com',
-    process.env.FRONTEND_URL
-].filter(Boolean);
-
-// CORS middleware configurado corretamente
 app.use(cors({
     origin: function(origin, callback) {
-        // Permitir requisições sem origem (como mobile apps ou curl)
-        if (!origin) return callback(null, true);
+        const allowedOrigins = [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://localhost:3002',
+            'http://127.0.0.1:3000',
+            'https://mindtrack-pqvu.onrender.com',
+            'https://mindtrack-pqvu.onrender.com',
+            null, // Para requisições sem origem
+            undefined
+        ];
         
-        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+        // Permitir em desenvolvimento
+        if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
             callback(null, true);
         } else {
-            console.log('Origem bloqueada pelo CORS:', origin);
+            console.log(`CORS bloqueado para: ${origin}`);
             callback(null, true); // Em desenvolvimento, permite todas
         }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
 
-// Body parser middleware
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -47,18 +46,30 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Cache-Control', 'no-cache');
     next();
 });
 
 // Request logging
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Origin: ${req.headers.origin || 'same-origin'}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
     next();
 });
 
-// Static files
+// Static files - Serve both frontend and root
 const frontendPath = path.join(__dirname, '../frontend');
-app.use(express.static(frontendPath));
+const publicPath = path.join(__dirname, '../public');
+
+// Tentar servir arquivos estáticos de diferentes locais
+if (fs.existsSync(frontendPath)) {
+    app.use(express.static(frontendPath));
+    console.log(`📁 Servindo arquivos estáticos de: ${frontendPath}`);
+}
+if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+    console.log(`📁 Servindo arquivos estáticos de: ${publicPath}`);
+}
+app.use(express.static(path.join(__dirname, '../')));
 
 // ============================================
 // JWT MIDDLEWARE
@@ -104,7 +115,7 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Rota de configuração para o frontend
+// Rota de configuração
 app.get('/api/config', (req, res) => {
     const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
     res.json({
@@ -139,7 +150,8 @@ app.post('/api/register', async (req, res) => {
                     if (err.message.includes('UNIQUE constraint failed')) {
                         return res.status(409).json({ error: 'Email já cadastrado' });
                     }
-                    throw err;
+                    console.error('Erro no INSERT:', err);
+                    return res.status(500).json({ error: 'Erro ao criar usuário' });
                 }
                 res.status(201).json({ id: this.lastID, message: 'Usuário criado com sucesso' });
             });
@@ -157,7 +169,11 @@ app.post('/api/login', async (req, res) => {
         }
 
         db.get('SELECT id, name, email, type, password FROM users WHERE email = ?', [email.toLowerCase().trim()], async (err, user) => {
-            if (err || !user) {
+            if (err) {
+                console.error('Erro na consulta:', err);
+                return res.status(500).json({ error: 'Erro interno do servidor' });
+            }
+            if (!user) {
                 return res.status(401).json({ error: 'Credenciais inválidas' });
             }
             const isValid = await bcrypt.compare(password, user.password);
@@ -185,7 +201,10 @@ app.get('/api/profile', verifyToken, (req, res) => {
 // ============================================
 app.get('/api/emotions', verifyToken, (req, res) => {
     db.all('SELECT id, mood, comment, date FROM emotions WHERE user_id = ? ORDER BY date DESC', [req.userId], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Erro ao buscar emoções' });
+        if (err) {
+            console.error('Erro ao buscar emoções:', err);
+            return res.status(500).json({ error: 'Erro ao buscar emoções' });
+        }
         res.json(rows || []);
     });
 });
@@ -200,7 +219,10 @@ app.post('/api/emotions', verifyToken, (req, res) => {
     db.run('INSERT INTO emotions (user_id, mood, comment, date) VALUES (?, ?, ?, ?)',
         [req.userId, mood, comment?.trim() || null, date],
         function(err) {
-            if (err) return res.status(500).json({ error: 'Erro ao salvar emoção' });
+            if (err) {
+                console.error('Erro ao salvar emoção:', err);
+                return res.status(500).json({ error: 'Erro ao salvar emoção' });
+            }
             res.status(201).json({ id: this.lastID, message: 'Emoção registrada' });
         });
 });
@@ -214,7 +236,10 @@ app.put('/api/emotions/:id', verifyToken, (req, res) => {
     db.run('UPDATE emotions SET mood = ?, comment = ? WHERE id = ? AND user_id = ?',
         [mood, comment?.trim() || null, req.params.id, req.userId],
         function(err) {
-            if (err) return res.status(500).json({ error: 'Erro ao atualizar' });
+            if (err) {
+                console.error('Erro ao atualizar:', err);
+                return res.status(500).json({ error: 'Erro ao atualizar' });
+            }
             if (this.changes === 0) return res.status(404).json({ error: 'Emoção não encontrada' });
             res.json({ message: 'Atualizado com sucesso' });
         });
@@ -222,46 +247,78 @@ app.put('/api/emotions/:id', verifyToken, (req, res) => {
 
 app.delete('/api/emotions/:id', verifyToken, (req, res) => {
     db.run('DELETE FROM emotions WHERE id = ? AND user_id = ?', [req.params.id, req.userId], function(err) {
-        if (err) return res.status(500).json({ error: 'Erro ao excluir' });
+        if (err) {
+            console.error('Erro ao excluir:', err);
+            return res.status(500).json({ error: 'Erro ao excluir' });
+        }
         if (this.changes === 0) return res.status(404).json({ error: 'Emoção não encontrada' });
         res.json({ message: 'Excluído com sucesso' });
     });
 });
 
-// Team emotions (manager only)
-app.get('/api/team-emotions', verifyToken, requireRole(['manager']), (req, res) => {
-    const dateLimit = new Date();
-    dateLimit.setDate(dateLimit.getDate() - 30);
-    db.all(`SELECT e.id, e.mood, e.comment, e.date, u.name, u.email FROM emotions e JOIN users u ON e.user_id = u.id WHERE e.date >= ? ORDER BY e.date DESC`,
-        [dateLimit.toISOString().split('T')[0]], (err, rows) => {
-            if (err) return res.status(500).json({ error: 'Erro ao buscar emoções da equipe' });
-            res.json(rows || []);
-        });
-});
+// ============================================
+// TEAM ROUTES (Manager only)
+// ============================================
 
-// Team members list (manager only)
-app.get('/api/team-members', verifyToken, requireRole(['manager']), (req, res) => {
+// Team members list - CORRIGIDO
+app.get('/api/team-members', verifyToken, (req, res) => {
+    // Verificar se é manager
+    if (req.userType !== 'manager') {
+        return res.status(403).json({ error: 'Acesso negado. Apenas gestores podem acessar.' });
+    }
+    
     db.all('SELECT id, name, email, type FROM users WHERE type = ? ORDER BY name', ['employee'], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Erro ao buscar membros' });
+        if (err) {
+            console.error('Erro ao buscar membros:', err);
+            return res.status(500).json({ error: 'Erro ao buscar membros da equipe' });
+        }
+        console.log(`✅ ${rows.length} membros da equipe encontrados`);
         res.json(rows || []);
     });
 });
 
+// Team emotions (manager only)
+app.get('/api/team-emotions', verifyToken, (req, res) => {
+    if (req.userType !== 'manager') {
+        return res.status(403).json({ error: 'Acesso negado. Apenas gestores podem acessar.' });
+    }
+    
+    const dateLimit = new Date();
+    dateLimit.setDate(dateLimit.getDate() - 30);
+    db.all(`SELECT e.id, e.mood, e.comment, e.date, u.name, u.email FROM emotions e JOIN users u ON e.user_id = u.id WHERE e.date >= ? ORDER BY e.date DESC`,
+        [dateLimit.toISOString().split('T')[0]], (err, rows) => {
+            if (err) {
+                console.error('Erro ao buscar emoções da equipe:', err);
+                return res.status(500).json({ error: 'Erro ao buscar emoções da equipe' });
+            }
+            res.json(rows || []);
+        });
+});
+
 // Get member details (manager only)
-app.get('/api/member/:id', verifyToken, requireRole(['manager']), (req, res) => {
+app.get('/api/member/:id', verifyToken, (req, res) => {
+    if (req.userType !== 'manager') {
+        return res.status(403).json({ error: 'Acesso negado. Apenas gestores podem acessar.' });
+    }
+    
     const memberId = req.params.id;
-    db.all(`SELECT u.name, u.email, u.type, e.mood, e.comment, e.date FROM users u LEFT JOIN emotions e ON u.id = e.user_id WHERE u.id = ? ORDER BY e.date DESC`, [memberId], (err, rows) => {
-        if (err || rows.length === 0) return res.status(404).json({ error: 'Membro não encontrado' });
-        db.all('SELECT id, objective, progress FROM goals WHERE user_id = ? ORDER BY id DESC', [memberId], (err, goals) => {
-            const member = {
-                id: memberId,
-                name: rows[0].name,
-                email: rows[0].email,
-                type: rows[0].type,
-                emotions: rows.filter(r => r.mood).map(r => ({ mood: r.mood, comment: r.comment, date: r.date })),
-                goals: goals || []
-            };
-            res.json(member);
+    db.get('SELECT id, name, email, type FROM users WHERE id = ?', [memberId], (err, user) => {
+        if (err || !user) {
+            return res.status(404).json({ error: 'Membro não encontrado' });
+        }
+        
+        db.all('SELECT mood, comment, date FROM emotions WHERE user_id = ? ORDER BY date DESC', [memberId], (err, emotions) => {
+            db.all('SELECT id, objective, progress FROM goals WHERE user_id = ? ORDER BY id DESC', [memberId], (err, goals) => {
+                const member = {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    type: user.type,
+                    emotions: emotions || [],
+                    goals: goals || []
+                };
+                res.json(member);
+            });
         });
     });
 });
@@ -271,7 +328,10 @@ app.get('/api/member/:id', verifyToken, requireRole(['manager']), (req, res) => 
 // ============================================
 app.get('/api/goals', verifyToken, (req, res) => {
     db.all('SELECT id, objective, progress FROM goals WHERE user_id = ? ORDER BY id DESC', [req.userId], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Erro ao buscar metas' });
+        if (err) {
+            console.error('Erro ao buscar metas:', err);
+            return res.status(500).json({ error: 'Erro ao buscar metas' });
+        }
         res.json(rows || []);
     });
 });
@@ -280,7 +340,10 @@ app.post('/api/goals', verifyToken, (req, res) => {
     const { objective } = req.body;
     if (!objective?.trim()) return res.status(400).json({ error: 'Objetivo é obrigatório' });
     db.run('INSERT INTO goals (user_id, objective) VALUES (?, ?)', [req.userId, objective.trim()], function(err) {
-        if (err) return res.status(500).json({ error: 'Erro ao criar meta' });
+        if (err) {
+            console.error('Erro ao criar meta:', err);
+            return res.status(500).json({ error: 'Erro ao criar meta' });
+        }
         res.status(201).json({ id: this.lastID, message: 'Meta criada' });
     });
 });
@@ -292,7 +355,10 @@ app.put('/api/goals/:id', verifyToken, (req, res) => {
     }
     db.run('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?', 
         [progress, req.params.id, req.userId], function(err) {
-            if (err) return res.status(500).json({ error: 'Erro ao atualizar' });
+            if (err) {
+                console.error('Erro ao atualizar meta:', err);
+                return res.status(500).json({ error: 'Erro ao atualizar' });
+            }
             if (this.changes === 0) return res.status(404).json({ error: 'Meta não encontrada' });
             res.json({ message: 'Meta atualizada' });
         });
@@ -300,7 +366,10 @@ app.put('/api/goals/:id', verifyToken, (req, res) => {
 
 app.delete('/api/goals/:id', verifyToken, (req, res) => {
     db.run('DELETE FROM goals WHERE id = ? AND user_id = ?', [req.params.id, req.userId], function(err) {
-        if (err) return res.status(500).json({ error: 'Erro ao deletar' });
+        if (err) {
+            console.error('Erro ao deletar meta:', err);
+            return res.status(500).json({ error: 'Erro ao deletar' });
+        }
         if (this.changes === 0) return res.status(404).json({ error: 'Meta não encontrada' });
         res.json({ message: 'Meta removida' });
     });
@@ -314,44 +383,68 @@ app.post('/api/feedback', (req, res) => {
     if (!content?.trim()) return res.status(400).json({ error: 'Conteúdo é obrigatório' });
     const date = new Date().toISOString();
     db.run('INSERT INTO feedback (content, date, status) VALUES (?, ?, ?)', [content.trim(), date, 'unread'], function(err) {
-        if (err) return res.status(500).json({ error: 'Erro ao enviar feedback' });
+        if (err) {
+            console.error('Erro ao enviar feedback:', err);
+            return res.status(500).json({ error: 'Erro ao enviar feedback' });
+        }
         res.status(201).json({ id: this.lastID, message: 'Feedback enviado' });
     });
 });
 
-app.get('/api/feedback', verifyToken, requireRole(['manager']), (req, res) => {
+app.get('/api/feedback', verifyToken, (req, res) => {
+    if (req.userType !== 'manager') {
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
     db.all('SELECT id, content, date, status, response FROM feedback ORDER BY date DESC', [], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Erro ao buscar feedbacks' });
+        if (err) {
+            console.error('Erro ao buscar feedbacks:', err);
+            return res.status(500).json({ error: 'Erro ao buscar feedbacks' });
+        }
         res.json(rows || []);
     });
 });
 
 app.get('/api/feedback/user', verifyToken, (req, res) => {
     db.all('SELECT id, content, response, date, status FROM feedback WHERE response IS NOT NULL ORDER BY date DESC LIMIT 20', [], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Erro ao buscar feedbacks' });
+        if (err) {
+            console.error('Erro ao buscar feedbacks do usuário:', err);
+            return res.status(500).json({ error: 'Erro ao buscar feedbacks' });
+        }
         res.json(rows || []);
     });
 });
 
-app.put('/api/feedback/:id/status', verifyToken, requireRole(['manager']), (req, res) => {
+app.put('/api/feedback/:id/status', verifyToken, (req, res) => {
+    if (req.userType !== 'manager') {
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
     const { status } = req.body;
     if (!['unread', 'read', 'responded'].includes(status)) {
         return res.status(400).json({ error: 'Status inválido' });
     }
     db.run('UPDATE feedback SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, req.params.id], function(err) {
-        if (err) return res.status(500).json({ error: 'Erro ao atualizar status' });
+        if (err) {
+            console.error('Erro ao atualizar status:', err);
+            return res.status(500).json({ error: 'Erro ao atualizar status' });
+        }
         if (this.changes === 0) return res.status(404).json({ error: 'Feedback não encontrado' });
         res.json({ message: 'Status atualizado', id: req.params.id, status });
     });
 });
 
-app.put('/api/feedback/:id/respond', verifyToken, requireRole(['manager']), (req, res) => {
+app.put('/api/feedback/:id/respond', verifyToken, (req, res) => {
+    if (req.userType !== 'manager') {
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
     const { response } = req.body;
     if (!response?.trim()) return res.status(400).json({ error: 'Resposta é obrigatória' });
     db.run('UPDATE feedback SET response = ?, status = ?, responded_by = ?, responded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [response.trim(), 'responded', req.userId, req.params.id],
         function(err) {
-            if (err) return res.status(500).json({ error: 'Erro ao responder' });
+            if (err) {
+                console.error('Erro ao responder feedback:', err);
+                return res.status(500).json({ error: 'Erro ao responder' });
+            }
             if (this.changes === 0) return res.status(404).json({ error: 'Feedback não encontrado' });
             res.json({ message: 'Feedback respondido', id: req.params.id });
         });
@@ -360,7 +453,10 @@ app.put('/api/feedback/:id/respond', verifyToken, requireRole(['manager']), (req
 // ============================================
 // ANALYTICS ROUTES
 // ============================================
-app.get('/api/analytics/overview', verifyToken, requireRole(['manager']), (req, res) => {
+app.get('/api/analytics/overview', verifyToken, (req, res) => {
+    if (req.userType !== 'manager') {
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
     db.get('SELECT COUNT(*) as total FROM users', [], (err, userCount) => {
         if (err) return res.status(500).json({ error: 'Erro ao buscar analytics' });
         const dateLimit = new Date();
@@ -379,17 +475,24 @@ app.get('/api/analytics/overview', verifyToken, requireRole(['manager']), (req, 
 // ============================================
 app.use('/api/*', (req, res) => {
     console.log(`⚠️ Rota não encontrada: ${req.method} ${req.path}`);
-    res.status(404).json({ error: 'Rota não encontrada', path: req.path });
+    res.status(404).json({ error: `Rota não encontrada: ${req.path}`, path: req.path });
 });
 
-// Serve frontend
+// Serve frontend - IMPORTANTE: deve vir depois das rotas da API
 app.get('*', (req, res) => {
     if (req.path.startsWith('/api/')) return;
-    res.sendFile(path.join(frontendPath, 'dashboard.html'), (err) => {
-        if (err) {
-            res.sendFile(path.join(frontendPath, 'index.html'));
-        }
-    });
+    
+    // Tentar servir dashboard.html primeiro, depois index.html
+    const dashboardPath = path.join(frontendPath, 'dashboard.html');
+    const indexPath = path.join(frontendPath, 'index.html');
+    
+    if (fs.existsSync(dashboardPath)) {
+        res.sendFile(dashboardPath);
+    } else if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('Página não encontrada');
+    }
 });
 
 app.use((err, req, res, next) => {
@@ -409,6 +512,15 @@ const startServer = (port) => {
         console.log('👤 Credenciais de teste:');
         console.log('   Admin: admin@mindtrack.com / admin123');
         console.log('   Funcionário: pedro@mindtrack.com / senha123');
+        console.log('\n📡 Rotas disponíveis:');
+        console.log('   POST /api/login');
+        console.log('   GET  /api/team-members');
+        console.log('   GET  /api/emotions');
+        console.log('   POST /api/emotions');
+        console.log('   GET  /api/goals');
+        console.log('   POST /api/goals');
+        console.log('   GET  /api/feedback');
+        console.log('   GET  /api/feedback/user\n');
     }).on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
             console.log(`⚠️ Porta ${port} ocupada, tentando porta ${port + 1}...`);
