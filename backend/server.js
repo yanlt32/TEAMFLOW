@@ -151,15 +151,20 @@ app.put('/api/emotions/:id', verifyToken, (req, res) => {
 });
 
 app.delete('/api/emotions/:id', verifyToken, (req, res) => {
-    db.run(
-        'DELETE FROM emotions WHERE id = ? AND user_id = ?',
-        [req.params.id, req.userId],
-        function(err) {
-            if (err) return res.status(500).json({ error: 'Erro ao deletar' });
-            if (this.changes === 0) return res.status(404).json({ error: 'Não encontrado' });
-            res.json({ message: 'Deletado' });
-        }
-    );
+    let query = 'DELETE FROM emotions WHERE id = ?';
+    const params = [req.params.id];
+
+    // managers podem remover qualquer registro, employees apenas o próprio
+    if (req.userType !== 'manager') {
+        query += ' AND user_id = ?';
+        params.push(req.userId);
+    }
+
+    db.run(query, params, function(err) {
+        if (err) return res.status(500).json({ error: 'Erro ao deletar' });
+        if (this.changes === 0) return res.status(404).json({ error: 'Não encontrado' });
+        res.json({ message: 'Deletado' });
+    });
 });
 
 // ============ ROTAS DE METAS ============

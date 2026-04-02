@@ -409,10 +409,17 @@ async function deleteEmotion(emotionId) {
             loadHistory();
             loadDashboard();
             checkTodayMood();
-        } else {
-            throw new Error('Erro ao excluir');
+            return;
         }
+
+        if (response.status === 404) {
+            showAlert('Registro não encontrado ou não pertence ao usuário atual.', 'warning');
+            return;
+        }
+
+        throw new Error('Erro ao excluir');
     } catch (error) {
+        console.error('Erro ao excluir emoção:', error);
         showAlert('Erro ao excluir registro', 'danger');
     }
 }
@@ -1076,16 +1083,26 @@ async function loadUserResponses() {
         const response = await fetch(`${API_BASE}/feedback/user`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
-        if (response.ok) {
-            const userFeedbacks = await response.json();
-            
-            const responsesContainer = document.getElementById('responsesList');
-            const responsesSection = document.getElementById('employeeResponses');
-            
-            if (userFeedbacks.length > 0 && responsesSection) {
-                responsesSection.classList.remove('hidden');
-                responsesContainer.innerHTML = userFeedbacks.map(f => `
+
+        const responsesSection = document.getElementById('employeeResponses');
+        const responsesContainer = document.getElementById('responsesList');
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                // API não disponível, esconder seção sem quebrar o fluxo
+                if (responsesSection) responsesSection.classList.add('hidden');
+                return;
+            }
+            throw new Error(`Falha ao carregar respostas: ${response.status}`);
+        }
+
+        const userFeedbacks = await response.json();
+
+        if (!responsesSection || !responsesContainer) return;
+
+        if (userFeedbacks.length > 0) {
+            responsesSection.classList.remove('hidden');
+            responsesContainer.innerHTML = userFeedbacks.map(f => `
                     <div class="feedback-item responded">
                         <div class="feedback-header">
                             <div class="feedback-date">${formatDate(f.date)}</div>
@@ -1298,10 +1315,21 @@ async function respondFeedback(id, responseText) {
 
 // ========== UTILITY FUNCTIONS ==========
 async function fetchEmotions() {
-    const response = await fetch(`${API_BASE}/emotions`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    return await response.json();
+    try {
+        const response = await fetch(`${API_BASE}/emotions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+            console.warn('Falha ao buscar emoções:', response.status);
+            return [];
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Erro ao buscar emoções:', error);
+        return [];
+    }
 }
 
 function getMoodEmoji(mood) {

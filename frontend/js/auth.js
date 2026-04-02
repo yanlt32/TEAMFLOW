@@ -17,11 +17,23 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     console.log('📡 API Base:', API_BASE);
     
-    // Verificar se já está logado
+    // Verificar se já está logado (token válido)
     const token = localStorage.getItem('token');
     if (token) {
-        window.location.href = 'dashboard.html';
-        return;
+        try {
+            const profileResponse = await fetch(`${API_BASE}/profile`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (profileResponse.ok) {
+                window.location.href = 'dashboard.html';
+                return;
+            }
+        } catch (err) {
+            console.warn('Token inválido ou servidor inacessível:', err);
+        }
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
     }
     
     setupPasswordToggle();
