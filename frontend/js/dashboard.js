@@ -184,8 +184,16 @@ function updateUserInfo() {
     const userAvatarDiv = document.getElementById('userAvatar');
     const userRoleSpan = document.getElementById('userRole');
     
-    if (userNameSpan) userNameSpan.textContent = user.name;
-    if (userAvatarDiv) userAvatarDiv.textContent = user.name.charAt(0).toUpperCase();
+    if (!user) {
+        console.warn('User não carregado em localStorage');
+        return;
+    }
+    
+    const userName = user.name || 'Usuário';
+    const userInitial = (user.name || 'U').charAt(0).toUpperCase();
+    
+    if (userNameSpan) userNameSpan.textContent = userName;
+    if (userAvatarDiv) userAvatarDiv.textContent = userInitial;
     
     if (userRoleSpan) {
         userRoleSpan.textContent = user.type === 'manager' ? 'Administrador' : 'Funcionário';
@@ -1089,7 +1097,6 @@ async function loadUserResponses() {
 
         if (!response.ok) {
             if (response.status === 404) {
-                // API não disponível, esconder seção sem quebrar o fluxo
                 if (responsesSection) responsesSection.classList.add('hidden');
                 return;
             }
@@ -1102,32 +1109,32 @@ async function loadUserResponses() {
 
         if (userFeedbacks.length > 0) {
             responsesSection.classList.remove('hidden');
-            responsesContainer.innerHTML = userFeedbacks.map(f => `
-                    <div class="feedback-item responded">
-                        <div class="feedback-header">
-                            <div class="feedback-date">${formatDate(f.date)}</div>
-                            <div class="status-badge ${f.response ? 'status-responded' : 'status-unread'}">
-                                ${f.response ? 'Respondido' : 'Aguardando resposta'}
-                            </div>
+            const feedbackHTML = userFeedbacks.map(f => {
+                const responseHtml = f.response 
+                    ? `<div class="feedback-response">
+                        <strong><i class="fas fa-reply"></i> Resposta do Gestor:</strong>
+                        <div style="margin-top: 8px; padding: 12px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #10b981;">
+                            ${escapeHtml(f.response)}
                         </div>
-                        <div class="feedback-content"><strong>Seu feedback:</strong> ${escapeHtml(f.content)}</div>
-                        ${f.response ? `
-                            <div class="feedback-response">
-                                <strong><i class="fas fa-reply"></i> Resposta do Gestor:</strong>
-                                <div style="margin-top: 8px; padding: 12px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #10b981;">
-                                    ${escapeHtml(f.response)}
-                                </div>
-                            </div>
-                        ` : `
-                            <div class="alert alert-info" style="margin-top: 8px; padding: 8px 12px;">
-                                <i class="fas fa-clock"></i> Aguardando resposta do gestor...
-                            </div>
-                        `}
+                      </div>`
+                    : `<div class="alert alert-info" style="margin-top: 8px; padding: 8px 12px;">
+                        <i class="fas fa-clock"></i> Aguardando resposta do gestor...
+                      </div>`;
+                
+                return `<div class="feedback-item responded">
+                    <div class="feedback-header">
+                        <div class="feedback-date">${formatDate(f.date)}</div>
+                        <div class="status-badge ${f.response ? 'status-responded' : 'status-unread'}">
+                            ${f.response ? 'Respondido' : 'Aguardando resposta'}
+                        </div>
                     </div>
-                `).join('');
-            } else if (responsesSection) {
-                responsesSection.classList.add('hidden');
-            }
+                    <div class="feedback-content"><strong>Seu feedback:</strong> ${escapeHtml(f.content)}</div>
+                    ${responseHtml}
+                </div>`;
+            }).join('');
+            responsesContainer.innerHTML = feedbackHTML;
+        } else if (responsesSection) {
+            responsesSection.classList.add('hidden');
         }
     } catch (error) {
         console.error('Erro ao carregar respostas:', error);
