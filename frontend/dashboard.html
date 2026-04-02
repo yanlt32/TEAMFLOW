@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MindTrack - Controle Emocional Profissional</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>MindTrack - Dashboard</title>
     <link rel="stylesheet" href="css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -13,10 +13,14 @@
     <header class="header">
         <div class="container">
             <div class="header-content">
-                <a href="#" class="logo">MindTrack</a>
+                <a href="#" class="logo">
+                    <i class="fas fa-brain"></i>
+                    MindTrack
+                </a>
                 <div class="user-info">
                     <div class="user-avatar" id="userAvatar">U</div>
-                    <span id="userName">Usuário</span>
+                    <span class="user-name" id="userName">Usuário</span>
+                    <span class="user-role" id="userRole"></span>
                     <button class="logout-btn" id="logoutBtn">
                         <i class="fas fa-sign-out-alt"></i> Sair
                     </button>
@@ -28,40 +32,51 @@
     <!-- Navigation -->
     <nav class="nav">
         <ul class="nav-menu">
-            <li class="nav-item">
+            <!-- Employee Sections -->
+            <li class="nav-item employee-only">
                 <a href="#" class="nav-link active" data-section="dashboard">
-                    <i class="fas fa-chart-line nav-icon"></i>
+                    <i class="fas fa-chart-line"></i>
                     Dashboard
                 </a>
             </li>
-            <li class="nav-item">
+            <li class="nav-item employee-only">
                 <a href="#" class="nav-link" data-section="checkin">
-                    <i class="fas fa-smile nav-icon"></i>
+                    <i class="fas fa-smile"></i>
                     Check-in Diário
                 </a>
             </li>
-            <li class="nav-item">
+            <li class="nav-item employee-only">
                 <a href="#" class="nav-link" data-section="history">
-                    <i class="fas fa-history nav-icon"></i>
+                    <i class="fas fa-history"></i>
                     Histórico
                 </a>
             </li>
-            <li class="nav-item">
+            <li class="nav-item employee-only">
                 <a href="#" class="nav-link" data-section="goals">
-                    <i class="fas fa-bullseye nav-icon"></i>
+                    <i class="fas fa-bullseye"></i>
                     Metas PDI
                 </a>
             </li>
-            <li class="nav-item">
-                <a href="#" class="nav-link" data-section="feedback">
-                    <i class="fas fa-comments nav-icon"></i>
-                    Feedback
+            
+            <!-- Manager Sections -->
+            <li class="nav-item manager-only">
+                <a href="#" class="nav-link" data-section="team">
+                    <i class="fas fa-users"></i>
+                    Equipe
                 </a>
             </li>
-            <li class="nav-item" id="teamNav">
-                <a href="#" class="nav-link" data-section="team">
-                    <i class="fas fa-users nav-icon"></i>
-                    Equipe
+            <li class="nav-item manager-only">
+                <a href="#" class="nav-link" data-section="teamAnalytics">
+                    <i class="fas fa-chart-bar"></i>
+                    Análise da Equipe
+                </a>
+            </li>
+            
+            <!-- Common Sections -->
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="feedback">
+                    <i class="fas fa-comments"></i>
+                    Feedback
                 </a>
             </li>
         </ul>
@@ -70,14 +85,13 @@
     <!-- Main Content -->
     <main class="main-content">
         <div class="container">
-            <!-- Dashboard Section -->
+            <!-- Dashboard Section (Employee) -->
             <section id="dashboardSection" class="section fade-in">
                 <div class="page-header">
-                    <h1 class="page-title">Dashboard</h1>
+                    <h1 class="page-title">Meu Dashboard</h1>
                     <p class="page-subtitle">Visão geral do seu bem-estar emocional</p>
                 </div>
 
-                <!-- Stats Cards -->
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-value" id="todayMood">--</div>
@@ -97,7 +111,6 @@
                     </div>
                 </div>
 
-                <!-- Charts Row -->
                 <div class="grid grid-2">
                     <div class="card">
                         <div class="card-header">
@@ -124,30 +137,29 @@
                     </div>
                 </div>
 
-                <!-- Recent Activity -->
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Atividade Recente</h3>
                         <p class="card-subtitle">Seus últimos registros emocionais</p>
                     </div>
                     <div class="card-content">
-                        <div id="recentActivity" class="emotion-timeline">
-                            <!-- Recent emotions will be loaded here -->
-                        </div>
+                        <div id="recentActivity" class="emotion-timeline"></div>
                     </div>
                 </div>
             </section>
 
-            <!-- Check-in Section -->
+            <!-- Check-in Section (Employee) -->
             <section id="checkinSection" class="section hidden">
                 <div class="page-header">
                     <h1 class="page-title">Check-in Diário</h1>
-                    <p class="page-subtitle">Como você está se sentindo hoje?</p>
+                    <p class="page-subtitle" id="checkinSubtitle">Como você está se sentindo hoje?</p>
                 </div>
 
                 <div class="card">
                     <div class="card-content">
-                        <div class="mood-selector">
+                        <div id="checkinMessage" class="alert alert-info hidden"></div>
+                        
+                        <div class="mood-selector" id="moodSelector">
                             <div class="mood-option" data-mood="happy">
                                 <div class="mood-emoji">😄</div>
                                 <div class="mood-label">Feliz</div>
@@ -175,10 +187,17 @@
                             <textarea class="form-textarea" id="comment" placeholder="Conte-nos mais sobre como você está se sentindo..."></textarea>
                         </div>
 
-                        <button class="btn btn-primary" id="submitMood">
-                            <i class="fas fa-paper-plane"></i>
-                            Registrar Humor
-                        </button>
+                        <div class="checkin-actions">
+                            <button class="btn btn-primary" id="submitMood">
+                                <i class="fas fa-paper-plane"></i> Registrar Humor
+                            </button>
+                            <button class="btn btn-secondary hidden" id="editMoodBtn">
+                                <i class="fas fa-save"></i> Atualizar Humor
+                            </button>
+                            <button class="btn btn-secondary hidden" id="cancelEditBtn">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
 
                         <div id="suggestion" class="alert alert-success hidden">
                             <i class="fas fa-lightbulb"></i>
@@ -188,7 +207,7 @@
                 </div>
             </section>
 
-            <!-- History Section -->
+            <!-- History Section (Employee) -->
             <section id="historySection" class="section hidden">
                 <div class="page-header">
                     <h1 class="page-title">Histórico Emocional</h1>
@@ -201,14 +220,12 @@
                         <p class="card-subtitle">Todos os seus registros organizados por data</p>
                     </div>
                     <div class="card-content">
-                        <div id="historyList" class="emotion-timeline">
-                            <!-- History will be loaded here -->
-                        </div>
+                        <div id="historyList" class="emotion-timeline"></div>
                     </div>
                 </div>
             </section>
 
-            <!-- Goals Section -->
+            <!-- Goals Section (Employee) -->
             <section id="goalsSection" class="section hidden">
                 <div class="page-header">
                     <h1 class="page-title">Metas de Desenvolvimento</h1>
@@ -219,7 +236,6 @@
                     <div class="card">
                         <div class="card-header">
                             <h3 class="card-title">Nova Meta</h3>
-                            <p class="card-subtitle">Defina um novo objetivo de desenvolvimento</p>
                         </div>
                         <div class="card-content">
                             <form id="goalForm">
@@ -228,8 +244,7 @@
                                     <input type="text" class="form-input" id="goalInput" placeholder="Ex: Melhorar comunicação em reuniões" required>
                                 </div>
                                 <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-plus"></i>
-                                    Adicionar Meta
+                                    <i class="fas fa-plus"></i> Adicionar Meta
                                 </button>
                             </form>
                         </div>
@@ -238,22 +253,116 @@
                     <div class="card">
                         <div class="card-header">
                             <h3 class="card-title">Suas Metas</h3>
-                            <p class="card-subtitle">Acompanhe o progresso dos seus objetivos</p>
                         </div>
                         <div class="card-content">
-                            <div id="goalsList" class="goals-list">
-                                <!-- Goals will be loaded here -->
+                            <div id="goalsList" class="goals-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Team Management Section (Manager) -->
+            <section id="teamSection" class="section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Gestão de Equipe</h1>
+                    <p class="page-subtitle">Conheça e acompanhe o bem-estar da sua equipe</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="teamTotalMembers">0</div>
+                        <div class="stat-label">Total de Funcionários</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="teamTotalEmotions">0</div>
+                        <div class="stat-label">Registros Emocionais</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="teamTotalGoals">0</div>
+                        <div class="stat-label">Metas Ativas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="teamAvgMood">0</div>
+                        <div class="stat-label">Média Emocional</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-user-friends"></i>
+                            Membros da Equipe
+                        </h3>
+                    </div>
+                    <div class="card-content">
+                        <div id="teamMembersList" class="team-grid"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Team Analytics Section (Manager) -->
+            <section id="teamAnalyticsSection" class="section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Análise da Equipe</h1>
+                    <p class="page-subtitle">Insights e tendências do bem-estar da equipe</p>
+                </div>
+
+                <div class="grid grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Distribuição de Humor da Equipe</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="chart-container">
+                                <canvas id="teamMoodChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Evolução da Equipe</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="chart-container">
+                                <canvas id="teamEvolutionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Métricas de Engajamento</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" id="engagementRate">0%</div>
+                                <div class="stat-label">Taxa de Engajamento</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="avgCheckins">0</div>
+                                <div class="stat-label">Check-ins/Mês</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="activeMembers">0</div>
+                                <div class="stat-label">Membros Ativos</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="goalsCompleted">0</div>
+                                <div class="stat-label">Metas Concluídas</div>
                             </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- Feedback Section -->
+            <!-- Feedback Section (Common) -->
             <section id="feedbackSection" class="section hidden">
                 <div class="page-header">
                     <h1 class="page-title">Feedback</h1>
-                    <p class="page-subtitle" id="feedbackSubtitle">Compartilhe suas sugestões de forma segura e anônima</p>
+                    <p class="page-subtitle" id="feedbackSubtitle">Compartilhe suas sugestões de forma segura</p>
                 </div>
 
                 <!-- Employee Feedback Form -->
@@ -265,58 +374,49 @@
                         </div>
                         <div class="alert alert-warning">
                             <i class="fas fa-shield-alt"></i>
-                            <span>Este feedback será enviado de forma completamente anônima</span>
+                            <span>Seu feedback é anônimo e será visto apenas pelos gestores</span>
                         </div>
                         <button class="btn btn-primary" id="submitFeedback">
-                            <i class="fas fa-paper-plane"></i>
-                            Enviar Feedback
+                            <i class="fas fa-paper-plane"></i> Enviar Feedback
                         </button>
+                    </div>
+                </div>
+
+                <!-- Employee Received Responses -->
+                <div id="employeeResponses" class="card hidden">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-reply-all"></i>
+                            Respostas Recebidas
+                        </h3>
+                        <p class="card-subtitle">Respostas dos gestores para seus feedbacks</p>
+                    </div>
+                    <div class="card-content">
+                        <div id="responsesList" class="feedback-list"></div>
                     </div>
                 </div>
 
                 <!-- Manager Feedback Management -->
                 <div id="managerFeedback" class="hidden">
-                    <!-- Feedback Statistics -->
                     <div class="stats-grid">
                         <div class="stat-card">
-                            <div class="stat-icon">
-                                <i class="fas fa-envelope"></i>
-                            </div>
-                            <div class="stat-content">
-                                <div class="stat-number" id="totalFeedback">0</div>
-                                <div class="stat-label">Total de Feedbacks</div>
-                            </div>
+                            <div class="stat-value" id="totalFeedback">0</div>
+                            <div class="stat-label">Total de Feedbacks</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-icon">
-                                <i class="fas fa-envelope-open"></i>
-                            </div>
-                            <div class="stat-content">
-                                <div class="stat-number" id="unreadFeedback">0</div>
-                                <div class="stat-label">Não Lidos</div>
-                            </div>
+                            <div class="stat-value" id="unreadFeedback">0</div>
+                            <div class="stat-label">Não Lidos</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-icon">
-                                <i class="fas fa-calendar-alt"></i>
-                            </div>
-                            <div class="stat-content">
-                                <div class="stat-number" id="thisMonthFeedback">0</div>
-                                <div class="stat-label">Este Mês</div>
-                            </div>
+                            <div class="stat-value" id="thisMonthFeedback">0</div>
+                            <div class="stat-label">Este Mês</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-icon">
-                                <i class="fas fa-reply"></i>
-                            </div>
-                            <div class="stat-content">
-                                <div class="stat-number" id="respondedFeedback">0</div>
-                                <div class="stat-label">Respondidos</div>
-                            </div>
+                            <div class="stat-value" id="respondedFeedback">0</div>
+                            <div class="stat-label">Respondidos</div>
                         </div>
                     </div>
 
-                    <!-- Feedback Filters -->
                     <div class="card">
                         <div class="card-header">
                             <h3 class="card-title">Filtros</h3>
@@ -344,23 +444,19 @@
                                 </div>
                                 <div class="form-group">
                                     <button class="btn btn-secondary" id="applyFilters">
-                                        <i class="fas fa-filter"></i>
-                                        Aplicar Filtros
+                                        <i class="fas fa-filter"></i> Aplicar Filtros
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Feedback List -->
                     <div class="card">
                         <div class="card-header">
                             <h3 class="card-title">Feedbacks Recebidos</h3>
                         </div>
                         <div class="card-content">
-                            <div id="feedbackList" class="feedback-list">
-                                <!-- Feedback items will be loaded here -->
-                            </div>
+                            <div id="feedbackList" class="feedback-list"></div>
                             <div id="noFeedbackMessage" class="no-data">
                                 <i class="fas fa-inbox"></i>
                                 <p>Nenhum feedback encontrado</p>
@@ -369,10 +465,9 @@
                     </div>
                 </div>
             </section>
-
-            </section>
         </div>
     </main>
+
     <script src="config.js"></script>
     <script src="js/dashboard.js"></script>
 </body>

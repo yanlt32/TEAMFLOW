@@ -3,13 +3,13 @@
     console.log('🔍 Detectando servidor MindTrack...');
     
     // Lista de portas possíveis para testar
-    const possiblePorts = [3002, 3001, 3000, 3003, 3004, 3005];
+    const possiblePorts = [3000, 3001, 3002, 3003, 3004, 3005];
     
     // Função para testar se uma porta responde
     async function testPort(port) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 segundos timeout
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
             
             const response = await fetch(`http://localhost:${port}/api/health`, {
                 signal: controller.signal

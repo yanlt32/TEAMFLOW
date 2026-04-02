@@ -1,75 +1,44 @@
 // MindTrack Professional Dashboard
 // Detecta automaticamente a porta correta do servidor
-const getApiBase = () => {
-    // Se estiver em produção (servidor servindo os arquivos)
-    if (window.location.protocol !== 'file:') {
-        return `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api`;
-    }
-    
-    // Se estiver abrindo o arquivo diretamente, tenta as portas comuns
-    const possiblePorts = [3002, 3001, 3000];
-    
-    // Função para testar porta
-    const testPort = async (port) => {
-        try {
-            const response = await fetch(`http://localhost:${port}/api/health`);
-            if (response.ok) {
-                return `http://localhost:${port}/api`;
-            }
-        } catch (e) {
-            return null;
-        }
-        return null;
-    };
-    
-    // Retorna uma Promise que resolve com a URL correta
-    return (async () => {
-        for (const port of possiblePorts) {
-            const url = await testPort(port);
-            if (url) return url;
-        }
-        return 'http://localhost:3002/api'; // fallback
-    })();
-};
+
+let API_BASE = 'http://localhost:3000/api';
+let token = null;
+let user = null;
+let editingMood = false;
+let currentMoodId = null;
+let checkinLocked = false; // Controle de lock do check-in
+let checkinLockExpiry = null; // Data de expiração do lock
+
+// Variáveis globais para armazenar instâncias dos gráficos
+let weeklyChartInstance = null;
+let moodChartInstance = null;
+let teamMoodChartInstance = null;
+let teamEvolutionChartInstance = null;
 
 // Inicialização
-let API_BASE = 'http://localhost:3002/api'; // valor temporário
-const token = localStorage.getItem('token');
-const user = JSON.parse(localStorage.getItem('user'));
-
-// Aguarda a detecção da porta
-(async function initApiBase() {
-    API_BASE = await getApiBase();
+document.addEventListener('DOMContentLoaded', async function() {
+    token = localStorage.getItem('token');
+    user = JSON.parse(localStorage.getItem('user'));
+    
+    // Aguardar configuração da API
+    if (window.APP_CONFIG) {
+        API_BASE = window.APP_CONFIG.API_URL;
+    } else {
+        await new Promise(resolve => {
+            window.addEventListener('apiConfigLoaded', function(e) {
+                API_BASE = e.detail.apiUrl;
+                resolve();
+            });
+        });
+    }
+    
     console.log('✅ API configurada para:', API_BASE);
     
-    // Recarrega a seção atual se necessário
-    const activeSection = document.querySelector('.section:not(.hidden)')?.id;
-    if (activeSection) {
-        const sectionName = activeSection.replace('Section', '');
-        switch(sectionName) {
-            case 'feedback':
-                loadFeedback();
-                break;
-            case 'dashboard':
-                loadDashboard();
-                break;
-            case 'history':
-                loadHistory();
-                break;
-            case 'goals':
-                loadGoals();
-                break;
-        }
-    }
-})();
-
-// Initialize app
-document.addEventListener('DOMContentLoaded', function() {
     if (!token) {
         window.location.href = 'index.html';
         return;
     }
-
+    
     initializeApp();
 });
 
@@ -77,88 +46,183 @@ function initializeApp() {
     setupNavigation();
     setupEventListeners();
     updateUserInfo();
-    loadDashboard();
-
-    // Hide team nav for all users (removed team functionality)
+    loadCheckinLock(); // Carregar status do lock
+    
     const teamNavItem = document.getElementById('teamNav');
-    if (teamNavItem) {
-        teamNavItem.style.display = 'none';
+    const checkinNav = document.querySelector('.nav-link[data-section="checkin"]');
+    const historyNav = document.querySelector('.nav-link[data-section="history"]');
+    const goalsNav = document.querySelector('.nav-link[data-section="goals"]');
+    
+    if (user.type === 'manager') {
+        document.querySelectorAll('.employee-only').forEach(el => {
+            if (el) el.style.display = 'none';
+        });
+        document.querySelectorAll('.manager-only').forEach(el => {
+            if (el) el.style.display = 'block';
+        });
+        if (teamNavItem) teamNavItem.style.display = 'block';
+        
+        if (checkinNav && checkinNav.parentElement) checkinNav.parentElement.style.display = 'none';
+        if (historyNav && historyNav.parentElement) historyNav.parentElement.style.display = 'none';
+        if (goalsNav && goalsNav.parentElement) goalsNav.parentElement.style.display = 'none';
+        
+        loadTeamMembers();
+        loadTeamAnalytics();
+        
+        const teamLink = document.querySelector('.nav-link[data-section="team"]');
+        if (teamLink) teamLink.classList.add('active');
+    } else {
+        document.querySelectorAll('.employee-only').forEach(el => {
+            if (el) el.style.display = 'block';
+        });
+        document.querySelectorAll('.manager-only').forEach(el => {
+            if (el) el.style.display = 'none';
+        });
+        if (teamNavItem) teamNavItem.style.display = 'none';
+        
+        loadDashboard();
+        checkTodayMood();
+        loadUserResponses();
+        
+        const dashboardLink = document.querySelector('.nav-link[data-section="dashboard"]');
+        if (dashboardLink) dashboardLink.classList.add('active');
     }
 }
 
+// ========== CHECK-IN LOCK FUNCTIONS ==========
+function loadCheckinLock() {
+    const savedLock = localStorage.getItem(`checkin_lock_${user?.id}`);
+    if (savedLock) {
+        const lockData = JSON.parse(savedLock);
+        if (new Date(lockData.expiry) > new Date()) {
+            checkinLocked = true;
+            checkinLockExpiry = new Date(lockData.expiry);
+        } else {
+            localStorage.removeItem(`checkin_lock_${user?.id}`);
+            checkinLocked = false;
+        }
+    }
+}
+
+function setCheckinLock() {
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 1); // Lock por 1 dia
+    const lockData = {
+        locked: true,
+        expiry: expiryDate.toISOString(),
+        date: new Date().toLocaleDateString('sv-SE')
+    };
+    localStorage.setItem(`checkin_lock_${user?.id}`, JSON.stringify(lockData));
+    checkinLocked = true;
+    checkinLockExpiry = expiryDate;
+}
+
+function unlockCheckin() {
+    localStorage.removeItem(`checkin_lock_${user?.id}`);
+    checkinLocked = false;
+    checkinLockExpiry = null;
+}
+
+// Admin unlock function (expor globalmente)
+window.unlockUserCheckin = function(userId) {
+    localStorage.removeItem(`checkin_lock_${userId}`);
+    if (user?.id === userId) {
+        checkinLocked = false;
+        checkinLockExpiry = null;
+        checkTodayMood();
+        showAlert('Check-in desbloqueado com sucesso!', 'success');
+    }
+};
+
 function setupNavigation() {
     const navLinks = document.querySelectorAll('.nav-link');
-
     navLinks.forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
-
-            // Update active nav
             navLinks.forEach(l => l.classList.remove('active'));
             this.classList.add('active');
-
-            // Show section
             showSection(this.dataset.section);
         });
     });
 }
 
 function setupEventListeners() {
-    // Logout
-    document.getElementById('logoutBtn').addEventListener('click', logout);
-
-    // Mood selection
-    document.querySelectorAll('.mood-option').forEach(option => {
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+    
+    const moodOptions = document.querySelectorAll('.mood-option');
+    moodOptions.forEach(option => {
         option.addEventListener('click', function() {
-            document.querySelectorAll('.mood-option').forEach(opt => opt.classList.remove('selected'));
-            this.classList.add('selected');
+            if (!editingMood) {
+                document.querySelectorAll('.mood-option').forEach(opt => opt.classList.remove('selected'));
+                this.classList.add('selected');
+            }
         });
     });
-
-    // Submit mood
-    document.getElementById('submitMood').addEventListener('click', submitMood);
-
-    // Goal form
-    document.getElementById('goalForm').addEventListener('submit', addGoal);
-
-    // Feedback
-    document.getElementById('submitFeedback').addEventListener('click', submitFeedback);
-
-    const applyFiltersButton = document.getElementById('applyFilters');
-    if (applyFiltersButton) {
-        applyFiltersButton.addEventListener('click', loadFeedback);
-    }
+    
+    const submitMoodBtn = document.getElementById('submitMood');
+    if (submitMoodBtn) submitMoodBtn.addEventListener('click', submitMood);
+    
+    const editMoodBtn = document.getElementById('editMoodBtn');
+    if (editMoodBtn) editMoodBtn.addEventListener('click', updateMood);
+    
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+    if (cancelEditBtn) cancelEditBtn.addEventListener('click', cancelEdit);
+    
+    const goalForm = document.getElementById('goalForm');
+    if (goalForm) goalForm.addEventListener('submit', addGoal);
+    
+    const submitFeedbackBtn = document.getElementById('submitFeedback');
+    if (submitFeedbackBtn) submitFeedbackBtn.addEventListener('click', submitFeedback);
+    
+    const applyFiltersBtn = document.getElementById('applyFilters');
+    if (applyFiltersBtn) applyFiltersBtn.addEventListener('click', loadFeedback);
 }
 
 function updateUserInfo() {
-    document.getElementById('userName').textContent = user.name;
-    document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
+    const userNameSpan = document.getElementById('userName');
+    const userAvatarDiv = document.getElementById('userAvatar');
+    const userRoleSpan = document.getElementById('userRole');
+    
+    if (userNameSpan) userNameSpan.textContent = user.name;
+    if (userAvatarDiv) userAvatarDiv.textContent = user.name.charAt(0).toUpperCase();
+    
+    if (userRoleSpan) {
+        userRoleSpan.textContent = user.type === 'manager' ? 'Administrador' : 'Funcionário';
+        userRoleSpan.style.fontSize = '11px';
+        userRoleSpan.style.backgroundColor = '#f3f4f6';
+        userRoleSpan.style.padding = '2px 8px';
+        userRoleSpan.style.borderRadius = '20px';
+        userRoleSpan.style.marginLeft = '8px';
+    }
 }
 
 function showSection(sectionName) {
-    // Hide all sections
     document.querySelectorAll('.section').forEach(section => {
         section.classList.add('hidden');
     });
-
-    // Show selected section
+    
     const targetSection = document.getElementById(sectionName + 'Section');
     if (targetSection) {
         targetSection.classList.remove('hidden');
-
-        // Load section data
         switch(sectionName) {
-            case 'dashboard':
-                loadDashboard();
+            case 'dashboard': 
+                if (user.type !== 'manager') loadDashboard(); 
                 break;
-            case 'history':
-                loadHistory();
+            case 'history': 
+                if (user.type !== 'manager') loadHistory(); 
                 break;
-            case 'goals':
-                loadGoals();
+            case 'goals': 
+                if (user.type !== 'manager') loadGoals(); 
                 break;
-            case 'feedback':
-                loadFeedback();
+            case 'feedback': 
+                loadFeedback(); 
+                break;
+            case 'team': 
+                if (user.type === 'manager') loadTeamMembers(); 
+                break;
+            case 'teamAnalytics': 
+                if (user.type === 'manager') loadTeamAnalytics(); 
                 break;
         }
     }
@@ -169,191 +233,91 @@ function logout() {
     window.location.href = 'index.html';
 }
 
-// Dashboard Functions
-async function loadDashboard() {
+// ========== CHECK TODAY MOOD ==========
+async function checkTodayMood() {
     try {
+        // Verificar se check-in está bloqueado
+        if (checkinLocked) {
+            const submitBtn = document.getElementById('submitMood');
+            const editBtn = document.getElementById('editMoodBtn');
+            const cancelBtn = document.getElementById('cancelEditBtn');
+            const checkinMessage = document.getElementById('checkinMessage');
+            const checkinSubtitle = document.getElementById('checkinSubtitle');
+            const moodSelector = document.getElementById('moodSelector');
+            
+            if (checkinSubtitle) checkinSubtitle.textContent = 'Check-in realizado com sucesso!';
+            if (checkinMessage) {
+                checkinMessage.classList.remove('hidden');
+                const expiryDate = checkinLockExpiry ? new Date(checkinLockExpiry).toLocaleDateString('pt-BR') : 'amanhã';
+                checkinMessage.innerHTML = `<i class="fas fa-lock"></i> Você já realizou seu check-in hoje. Próximo check-in disponível em: <strong>${expiryDate}</strong>`;
+                checkinMessage.classList.add('alert-success');
+            }
+            
+            if (moodSelector) moodSelector.style.opacity = '0.5';
+            if (submitBtn) submitBtn.classList.add('hidden');
+            if (editBtn) editBtn.classList.add('hidden');
+            if (cancelBtn) cancelBtn.classList.add('hidden');
+            return;
+        }
+        
         const emotions = await fetchEmotions();
-
-        // Update stats
-        await updateDashboardStats(emotions);
-
-        // Create charts
-        createWeeklyChart(emotions);
-        createMoodChart(emotions);
-
-        // Load recent activity
-        loadRecentActivity(emotions.slice(0, 10));
-
-    } catch (error) {
-        console.error('Erro ao carregar dashboard:', error);
-    }
-}
-
-async function updateDashboardStats(emotions) {
-    // Today mood
-    const today = new Date().toLocaleDateString('sv-SE');
-    const todayEmotion = emotions.find(e => e.date === today);
-    document.getElementById('todayMood').textContent = todayEmotion ?
-        getMoodEmoji(todayEmotion.mood) : '--';
-
-    // Week average
-    const weekEmotions = emotions.slice(0, 7);
-    const avg = weekEmotions.length > 0 ?
-        Math.round(weekEmotions.reduce((sum, e) => sum + getMoodScore(e.mood), 0) / weekEmotions.length) : 0;
-    document.getElementById('weekAverage').textContent = avg > 0 ? `${avg}/5` : '--';
-
-    // Streak
-    let streak = 0;
-    for (let i = 0; i < emotions.length; i++) {
-        if (emotions[i].mood !== 'stressed' && emotions[i].mood !== 'overloaded') {
-            streak++;
+        const today = new Date().toLocaleDateString('sv-SE');
+        const todayEmotion = emotions.find(e => e.date === today);
+        
+        const submitBtn = document.getElementById('submitMood');
+        const editBtn = document.getElementById('editMoodBtn');
+        const cancelBtn = document.getElementById('cancelEditBtn');
+        const checkinMessage = document.getElementById('checkinMessage');
+        const checkinSubtitle = document.getElementById('checkinSubtitle');
+        const moodSelector = document.getElementById('moodSelector');
+        
+        if (moodSelector) moodSelector.style.opacity = '1';
+        
+        if (todayEmotion) {
+            currentMoodId = todayEmotion.id;
+            if (checkinSubtitle) checkinSubtitle.textContent = 'Você já registrou seu humor hoje. Deseja alterar?';
+            if (checkinMessage) {
+                checkinMessage.classList.remove('hidden');
+                checkinMessage.innerHTML = `<i class="fas fa-info-circle"></i> Você já registrou seu humor hoje: <strong>${getMoodLabel(todayEmotion.mood)} ${getMoodEmoji(todayEmotion.mood)}</strong>. Você pode editar este registro.`;
+                checkinMessage.classList.add('alert-info');
+            }
+            
+            if (submitBtn) submitBtn.classList.add('hidden');
+            if (editBtn) editBtn.classList.remove('hidden');
+            if (cancelBtn) cancelBtn.classList.remove('hidden');
+            
+            document.querySelectorAll('.mood-option').forEach(opt => {
+                if (opt.dataset.mood === todayEmotion.mood) {
+                    opt.classList.add('selected');
+                }
+            });
+            
+            const commentField = document.getElementById('comment');
+            if (commentField && todayEmotion.comment) {
+                commentField.value = todayEmotion.comment;
+            }
         } else {
-            break;
+            if (checkinSubtitle) checkinSubtitle.textContent = 'Como você está se sentindo hoje?';
+            if (checkinMessage) checkinMessage.classList.add('hidden');
+            if (submitBtn) submitBtn.classList.remove('hidden');
+            if (editBtn) editBtn.classList.add('hidden');
+            if (cancelBtn) cancelBtn.classList.add('hidden');
+            
+            const commentField = document.getElementById('comment');
+            if (commentField) commentField.value = '';
+            currentMoodId = null;
         }
-    }
-    document.getElementById('streakCount').textContent = streak;
-
-    // Goals progress
-    try {
-        const goalsResponse = await fetch(`${API_BASE}/goals`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const goals = await goalsResponse.json();
-        const avgProgress = goals.length > 0 ?
-            Math.round(goals.reduce((sum, g) => sum + g.progress, 0) / goals.length) : 0;
-        document.getElementById('goalsProgress').textContent = `${avgProgress}%`;
     } catch (error) {
-        console.error('Erro ao carregar progresso das metas:', error);
-        document.getElementById('goalsProgress').textContent = '--%';
+        console.error('Erro ao verificar humor de hoje:', error);
     }
 }
 
-function createWeeklyChart(emotions) {
-    const ctx = document.getElementById('weeklyChart').getContext('2d');
-
-    if (window.weeklyChart instanceof Chart) {
-        window.weeklyChart.destroy();
-    }
-
-    const last7Days = [];
-    for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        last7Days.push(date.toISOString().split('T')[0]);
-    }
-
-    const data = last7Days.map(date => {
-        const emotion = emotions.find(e => e.date === date);
-        return emotion ? getMoodScore(emotion.mood) : null;
-    });
-
-    window.weeklyChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: last7Days.map(date => new Date(date).toLocaleDateString('pt-BR', { weekday: 'short' })),
-            datasets: [{
-                label: 'Nível Emocional',
-                data: data,
-                borderColor: '#2563eb',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 5,
-                    ticks: {
-                        callback: function(value) {
-                            return ['😡', '😞', '😐', '🙂', '😄'][value - 1] || '';
-                        }
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                }
-            }
-        }
-    });
-}
-
-function createMoodChart(emotions) {
-    const ctx = document.getElementById('moodChart').getContext('2d');
-
-    if (window.moodChart instanceof Chart) {
-        window.moodChart.destroy();
-    }
-
-    const moodCounts = emotions.reduce((acc, emotion) => {
-        acc[emotion.mood] = (acc[emotion.mood] || 0) + 1;
-        return acc;
-    }, {});
-
-    window.moodChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: Object.keys(moodCounts).map(mood => getMoodLabel(mood)),
-            datasets: [{
-                data: Object.values(moodCounts),
-                backgroundColor: [
-                    '#10b981',
-                    '#84cc16',
-                    '#6b7280',
-                    '#f59e0b',
-                    '#ef4444'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
-    });
-}
-
-function loadRecentActivity(emotions) {
-    const container = document.getElementById('recentActivity');
-
-    if (emotions.length === 0) {
-        container.innerHTML = '<p class="text-center">Nenhum registro encontrado</p>';
+async function submitMood() {
+    if (checkinLocked) {
+        showAlert('Check-in já realizado hoje! Volte amanhã.', 'warning');
         return;
     }
-
-    const moodCounts = {};
-    emotions.forEach(emotion => {
-        moodCounts[emotion.mood] = (moodCounts[emotion.mood] || 0) + 1;
-    });
-
-    const moodOrder = ['happy', 'good', 'neutral', 'stressed', 'overloaded'];
-    const aggregated = moodOrder.filter(mood => moodCounts[mood]).map(mood => ({
-        mood,
-        count: moodCounts[mood]
-    }));
-
-    container.innerHTML = aggregated.map(item => `
-        <div class="emotion-entry">
-            <div class="emotion-mood">
-                <span class="mood-emoji">${getMoodEmoji(item.mood)}</span>
-                <span>${getMoodLabel(item.mood)}</span>
-                <span class="mood-count">(${item.count})</span>
-            </div>
-        </div>
-    `).join('');
-}
-
-// Mood Functions
-async function submitMood() {
+    
     const selectedMood = document.querySelector('.mood-option.selected');
     if (!selectedMood) {
         showAlert('Selecione um humor', 'warning');
@@ -378,12 +342,99 @@ async function submitMood() {
             document.getElementById('comment').value = '';
             document.querySelectorAll('.mood-option').forEach(opt => opt.classList.remove('selected'));
             showAlert('Humor registrado com sucesso!', 'success');
-        } else {
-            throw new Error('Erro ao salvar');
+            
+            // Bloquear check-in após registro
+            setCheckinLock();
+            
+            checkTodayMood();
+            loadDashboard();
+            
+            // Fechar o modal/section após 2 segundos
+            setTimeout(() => {
+                const dashboardLink = document.querySelector('.nav-link[data-section="dashboard"]');
+                if (dashboardLink) dashboardLink.click();
+            }, 2000);
         }
     } catch (error) {
         showAlert('Erro ao registrar humor', 'danger');
     }
+}
+
+async function updateMood() {
+    if (!currentMoodId) return;
+    
+    const selectedMood = document.querySelector('.mood-option.selected');
+    if (!selectedMood) {
+        showAlert('Selecione um humor', 'warning');
+        return;
+    }
+
+    const mood = selectedMood.dataset.mood;
+    const comment = document.getElementById('comment').value;
+
+    try {
+        const response = await fetch(`${API_BASE}/emotions/${currentMoodId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ mood, comment })
+        });
+
+        if (response.ok) {
+            showAlert('Humor atualizado com sucesso!', 'success');
+            cancelEdit();
+            checkTodayMood();
+            loadDashboard();
+        } else {
+            throw new Error('Erro ao atualizar');
+        }
+    } catch (error) {
+        showAlert('Erro ao atualizar humor', 'danger');
+    }
+}
+
+async function deleteEmotion(emotionId) {
+    if (!confirm('Tem certeza que deseja excluir este registro? Esta ação não pode ser desfeita.')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/emotions/${emotionId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            showAlert('Registro excluído com sucesso!', 'success');
+            loadHistory();
+            loadDashboard();
+            checkTodayMood();
+        } else {
+            throw new Error('Erro ao excluir');
+        }
+    } catch (error) {
+        showAlert('Erro ao excluir registro', 'danger');
+    }
+}
+
+function cancelEdit() {
+    editingMood = false;
+    currentMoodId = null;
+    document.querySelectorAll('.mood-option').forEach(opt => opt.classList.remove('selected'));
+    const commentField = document.getElementById('comment');
+    if (commentField) commentField.value = '';
+    checkTodayMood();
+}
+
+function editTodayMood() {
+    editingMood = true;
+    const submitBtn = document.getElementById('submitMood');
+    const editBtn = document.getElementById('editMoodBtn');
+    const cancelBtn = document.getElementById('cancelEditBtn');
+    
+    if (submitBtn) submitBtn.classList.add('hidden');
+    if (editBtn) editBtn.classList.remove('hidden');
+    if (cancelBtn) cancelBtn.classList.remove('hidden');
 }
 
 function showSuggestion(mood) {
@@ -396,18 +447,222 @@ function showSuggestion(mood) {
     };
 
     const suggestionEl = document.getElementById('suggestion');
-    document.getElementById('suggestionText').textContent = suggestions[mood];
-    suggestionEl.classList.remove('hidden');
+    if (suggestionEl) {
+        const suggestionText = document.getElementById('suggestionText');
+        if (suggestionText) suggestionText.textContent = suggestions[mood];
+        suggestionEl.classList.remove('hidden');
+        setTimeout(() => suggestionEl.classList.add('hidden'), 5000);
+    }
 }
 
-// History Functions
+// ========== DASHBOARD FUNCTIONS ==========
+async function loadDashboard() {
+    try {
+        const emotions = await fetchEmotions();
+        await updateDashboardStats(emotions);
+        createWeeklyChart(emotions);
+        createMoodChart(emotions);
+        loadRecentActivity(emotions.slice(0, 10));
+    } catch (error) {
+        console.error('Erro ao carregar dashboard:', error);
+    }
+}
+
+async function updateDashboardStats(emotions) {
+    const today = new Date().toLocaleDateString('sv-SE');
+    const todayEmotion = emotions.find(e => e.date === today);
+    const todayMoodEl = document.getElementById('todayMood');
+    if (todayMoodEl) {
+        todayMoodEl.textContent = todayEmotion ? getMoodEmoji(todayEmotion.mood) : '--';
+    }
+
+    const weekEmotions = emotions.slice(0, 7);
+    const avg = weekEmotions.length > 0 ?
+        Math.round(weekEmotions.reduce((sum, e) => sum + getMoodScore(e.mood), 0) / weekEmotions.length) : 0;
+    const weekAverageEl = document.getElementById('weekAverage');
+    if (weekAverageEl) weekAverageEl.textContent = avg > 0 ? `${avg}/5` : '--';
+
+    let streak = 0;
+    for (let i = 0; i < emotions.length; i++) {
+        if (emotions[i].mood !== 'stressed' && emotions[i].mood !== 'overloaded') {
+            streak++;
+        } else {
+            break;
+        }
+    }
+    const streakCountEl = document.getElementById('streakCount');
+    if (streakCountEl) streakCountEl.textContent = streak;
+
+    try {
+        const goalsResponse = await fetch(`${API_BASE}/goals`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const goals = await goalsResponse.json();
+        const avgProgress = goals.length > 0 ?
+            Math.round(goals.reduce((sum, g) => sum + g.progress, 0) / goals.length) : 0;
+        const goalsProgressEl = document.getElementById('goalsProgress');
+        if (goalsProgressEl) goalsProgressEl.textContent = `${avgProgress}%`;
+    } catch (error) {
+        console.error('Erro:', error);
+        const goalsProgressEl = document.getElementById('goalsProgress');
+        if (goalsProgressEl) goalsProgressEl.textContent = '--%';
+    }
+}
+
+function createWeeklyChart(emotions) {
+    const canvas = document.getElementById('weeklyChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    if (weeklyChartInstance) {
+        try { weeklyChartInstance.destroy(); } catch (e) {}
+        weeklyChartInstance = null;
+    }
+
+    const last7Days = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(today.getDate() - i);
+        last7Days.push(date.toISOString().split('T')[0]);
+    }
+
+    const data = last7Days.map(date => {
+        const emotion = emotions.find(e => e.date === date);
+        return emotion ? getMoodScore(emotion.mood) : null;
+    });
+
+    weeklyChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: last7Days.map(date => new Date(date).toLocaleDateString('pt-BR', { weekday: 'short' })),
+            datasets: [{
+                label: 'Nível Emocional',
+                data: data,
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                borderWidth: 3,
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#2563eb',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw;
+                            if (value === null) return 'Sem registro';
+                            const moods = ['😡 Muito Ruim', '😞 Ruim', '😐 Neutro', '🙂 Bom', '😄 Excelente'];
+                            return moods[value - 1] || `Nível ${value}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 5,
+                    min: 0,
+                    stepSize: 1,
+                    grid: { color: '#e5e5e5' },
+                    ticks: {
+                        callback: function(value) {
+                            const moods = ['😡', '😞', '😐', '🙂', '😄'];
+                            return moods[value - 1] || value;
+                        }
+                    }
+                },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+function createMoodChart(emotions) {
+    const canvas = document.getElementById('moodChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    if (moodChartInstance) {
+        try { moodChartInstance.destroy(); } catch (e) {}
+        moodChartInstance = null;
+    }
+
+    const moodCounts = { happy: 0, good: 0, neutral: 0, stressed: 0, overloaded: 0 };
+    emotions.forEach(e => {
+        if (moodCounts[e.mood] !== undefined) moodCounts[e.mood]++;
+    });
+
+    moodChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Feliz', 'Bem', 'Neutro', 'Estressado', 'Sobrecarregado'],
+            datasets: [{
+                data: [moodCounts.happy, moodCounts.good, moodCounts.neutral, moodCounts.stressed, moodCounts.overloaded],
+                backgroundColor: ['#10b981', '#84cc16', '#6b7280', '#f59e0b', '#ef4444'],
+                borderWidth: 0,
+                hoverOffset: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            cutout: '60%'
+        }
+    });
+}
+
+function loadRecentActivity(emotions) {
+    const container = document.getElementById('recentActivity');
+    if (!container) return;
+
+    if (emotions.length === 0) {
+        container.innerHTML = '<div class="no-data"><i class="fas fa-chart-line"></i><p>Nenhum registro encontrado</p></div>';
+        return;
+    }
+
+    const moodCounts = {};
+    emotions.forEach(emotion => { 
+        moodCounts[emotion.mood] = (moodCounts[emotion.mood] || 0) + 1; 
+    });
+
+    const moodOrder = ['happy', 'good', 'neutral', 'stressed', 'overloaded'];
+    const aggregated = moodOrder.filter(mood => moodCounts[mood]).map(mood => ({ mood, count: moodCounts[mood] }));
+
+    container.innerHTML = aggregated.map(item => `
+        <div class="emotion-entry">
+            <div class="emotion-mood">
+                <span class="mood-emoji">${getMoodEmoji(item.mood)}</span>
+                <span>${getMoodLabel(item.mood)}</span>
+                <span class="mood-count">(${item.count})</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ========== HISTORY FUNCTIONS COM CRUD ==========
 async function loadHistory() {
     try {
         const emotions = await fetchEmotions();
         const container = document.getElementById('historyList');
+        if (!container) return;
 
         if (emotions.length === 0) {
-            container.innerHTML = '<p class="text-center">Nenhum registro encontrado</p>';
+            container.innerHTML = '<div class="no-data"><i class="fas fa-history"></i><p>Nenhum registro encontrado</p></div>';
             return;
         }
 
@@ -418,7 +673,10 @@ async function loadHistory() {
                     <span class="mood-emoji">${getMoodEmoji(emotion.mood)}</span>
                     <span>${getMoodLabel(emotion.mood)}</span>
                 </div>
-                ${emotion.comment ? `<div class="emotion-comment">${emotion.comment}</div>` : ''}
+                ${emotion.comment ? `<div class="emotion-comment">${escapeHtml(emotion.comment)}</div>` : ''}
+                <button class="delete-btn" onclick="deleteEmotion(${emotion.id})" title="Excluir registro">
+                    <i class="fas fa-trash"></i>
+                </button>
             </div>
         `).join('');
     } catch (error) {
@@ -426,7 +684,7 @@ async function loadHistory() {
     }
 }
 
-// Goals Functions
+// ========== GOALS FUNCTIONS ==========
 async function loadGoals() {
     try {
         const response = await fetch(`${API_BASE}/goals`, {
@@ -435,22 +693,21 @@ async function loadGoals() {
         const goals = await response.json();
 
         const container = document.getElementById('goalsList');
+        if (!container) return;
 
         if (goals.length === 0) {
-            container.innerHTML = '<p class="text-center">Nenhuma meta definida</p>';
+            container.innerHTML = '<div class="no-data"><i class="fas fa-bullseye"></i><p>Nenhuma meta definida</p></div>';
             return;
         }
 
         container.innerHTML = goals.map(goal => `
             <div class="goal-item">
-                <div>
-                    <div class="goal-title">${goal.objective}</div>
-                    <div class="goal-progress">
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${goal.progress}%"></div>
-                        </div>
-                        <div class="progress-text">${goal.progress}%</div>
+                <div class="goal-title">${escapeHtml(goal.objective)}</div>
+                <div class="goal-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${goal.progress}%"></div>
                     </div>
+                    <div class="progress-text">${goal.progress}%</div>
                 </div>
                 <input type="range" min="0" max="100" value="${goal.progress}"
                        onchange="updateGoalProgress(${goal.id}, this.value)">
@@ -463,7 +720,8 @@ async function loadGoals() {
 
 async function addGoal(e) {
     e.preventDefault();
-    const objective = document.getElementById('goalInput').value;
+    const objective = document.getElementById('goalInput')?.value;
+    if (!objective) return;
 
     try {
         const response = await fetch(`${API_BASE}/goals`, {
@@ -502,32 +760,353 @@ async function updateGoalProgress(id, progress) {
     }
 }
 
-// Feedback functions
+// ========== TEAM FUNCTIONS (MANAGER) ==========
+async function loadTeamMembers() {
+    try {
+        const response = await fetch(`${API_BASE}/team-members`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Falha ao carregar equipe');
+        const members = await response.json();
+        renderTeamMembers(members);
+        calculateTeamStats(members);
+    } catch (error) {
+        console.error('Erro ao carregar equipe:', error);
+        showAlert('Erro ao carregar lista de funcionários', 'danger');
+    }
+}
+
+function renderTeamMembers(members) {
+    const container = document.getElementById('teamMembersList');
+    if (!container) return;
+    if (members.length === 0) {
+        container.innerHTML = '<div class="no-data"><i class="fas fa-users"></i><p>Nenhum funcionário cadastrado</p></div>';
+        return;
+    }
+    container.innerHTML = members.map(member => `
+        <div class="team-card" onclick="showMemberDetails(${member.id})">
+            <div class="team-card-header">
+                <h3>${escapeHtml(member.name)}</h3>
+                <p>${escapeHtml(member.email)}</p>
+                <div class="team-mood-badge" id="memberMood-${member.id}">😐</div>
+            </div>
+            <div class="team-card-content">
+                <div class="team-stats">
+                    <div class="team-stat">
+                        <div class="team-stat-value" id="memberMoodCount-${member.id}">0</div>
+                        <div class="team-stat-label">Registros</div>
+                    </div>
+                    <div class="team-stat">
+                        <div class="team-stat-value" id="memberGoalsCount-${member.id}">0</div>
+                        <div class="team-stat-label">Metas</div>
+                    </div>
+                    <div class="team-stat">
+                        <div class="team-stat-value" id="memberAvgMood-${member.id}">0</div>
+                        <div class="team-stat-label">Média</div>
+                    </div>
+                </div>
+                <button class="btn-unlock-checkin" onclick="event.stopPropagation(); unlockUserCheckin(${member.id})" style="margin-top: 12px; width: 100%; background: #f59e0b; color: white; border: none; padding: 6px; border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-unlock-alt"></i> Desbloquear Check-in
+                </button>
+            </div>
+        </div>
+    `).join('');
+    members.forEach(member => loadMemberStats(member.id));
+}
+
+async function loadMemberStats(memberId) {
+    try {
+        const response = await fetch(`${API_BASE}/member/${memberId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            const emotions = data.emotions || [];
+            const goals = data.goals || [];
+            const avgScore = emotions.length > 0 ? Math.round(emotions.reduce((sum, e) => sum + getMoodScore(e.mood), 0) / emotions.length) : 0;
+            const lastMood = emotions.length > 0 ? emotions[0].mood : 'neutral';
+            
+            const moodCountEl = document.getElementById(`memberMoodCount-${memberId}`);
+            const goalsCountEl = document.getElementById(`memberGoalsCount-${memberId}`);
+            const avgMoodEl = document.getElementById(`memberAvgMood-${memberId}`);
+            const moodBadgeEl = document.getElementById(`memberMood-${memberId}`);
+            
+            if (moodCountEl) moodCountEl.textContent = emotions.length;
+            if (goalsCountEl) goalsCountEl.textContent = goals.length;
+            if (avgMoodEl) avgMoodEl.textContent = avgScore;
+            if (moodBadgeEl) moodBadgeEl.textContent = getMoodEmoji(lastMood);
+        }
+    } catch (error) { console.error('Erro:', error); }
+}
+
+async function calculateTeamStats(members) {
+    let totalEmotions = 0, totalGoals = 0, totalMoodScore = 0, membersWithMood = 0;
+    for (const member of members) {
+        try {
+            const response = await fetch(`${API_BASE}/member/${member.id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const emotions = data.emotions || [];
+                const goals = data.goals || [];
+                totalEmotions += emotions.length;
+                totalGoals += goals.length;
+                if (emotions.length > 0) {
+                    totalMoodScore += emotions.reduce((sum, e) => sum + getMoodScore(e.mood), 0) / emotions.length;
+                    membersWithMood++;
+                }
+            }
+        } catch (error) { console.error('Erro:', error); }
+    }
+    document.getElementById('teamTotalMembers').textContent = members.length;
+    document.getElementById('teamTotalEmotions').textContent = totalEmotions;
+    document.getElementById('teamTotalGoals').textContent = totalGoals;
+    document.getElementById('teamAvgMood').textContent = membersWithMood > 0 ? (totalMoodScore / membersWithMood).toFixed(1) : '0';
+}
+
+async function loadTeamAnalytics() {
+    try {
+        const response = await fetch(`${API_BASE}/team-members`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const members = await response.json();
+        let allEmotions = [], completedGoals = 0, activeMembers = 0, totalCheckins = 0;
+        const memberMoodData = {};
+        
+        for (const member of members) {
+            const memberData = await fetch(`${API_BASE}/member/${member.id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (memberData.ok) {
+                const data = await memberData.json();
+                const emotions = data.emotions || [];
+                const goals = data.goals || [];
+                allEmotions.push(...emotions);
+                completedGoals += goals.filter(g => g.progress === 100).length;
+                if (emotions.length > 0) activeMembers++;
+                totalCheckins += emotions.length;
+                memberMoodData[member.name] = emotions;
+            }
+        }
+        
+        const moodCounts = { happy: 0, good: 0, neutral: 0, stressed: 0, overloaded: 0 };
+        allEmotions.forEach(e => { if (moodCounts[e.mood] !== undefined) moodCounts[e.mood]++; });
+        
+        const teamCtx = document.getElementById('teamMoodChart')?.getContext('2d');
+        if (teamCtx) {
+            if (teamMoodChartInstance) { try { teamMoodChartInstance.destroy(); } catch(e) {} }
+            teamMoodChartInstance = new Chart(teamCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Feliz', 'Bem', 'Neutro', 'Estressado', 'Sobrecarregado'],
+                    datasets: [{ data: [moodCounts.happy, moodCounts.good, moodCounts.neutral, moodCounts.stressed, moodCounts.overloaded], backgroundColor: ['#10b981', '#84cc16', '#6b7280', '#f59e0b', '#ef4444'], borderWidth: 0, hoverOffset: 10 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '60%' }
+            });
+        }
+        
+        // Criar gráfico de evolução da equipe
+        const evolutionCtx = document.getElementById('teamEvolutionChart')?.getContext('2d');
+        if (evolutionCtx && members.length > 0) {
+            if (teamEvolutionChartInstance) { try { teamEvolutionChartInstance.destroy(); } catch(e) {} }
+            
+            // Coletar dados dos últimos 7 dias
+            const last7Days = [];
+            const today = new Date();
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(today.getDate() - i);
+                last7Days.push(date.toISOString().split('T')[0]);
+            }
+            
+            // Calcular média diária da equipe
+            const dailyAverages = last7Days.map(date => {
+                let totalScore = 0;
+                let count = 0;
+                members.forEach(member => {
+                    const memberEmotions = memberMoodData[member.name] || [];
+                    const dayEmotion = memberEmotions.find(e => e.date === date);
+                    if (dayEmotion) {
+                        totalScore += getMoodScore(dayEmotion.mood);
+                        count++;
+                    }
+                });
+                return count > 0 ? totalScore / count : null;
+            });
+            
+            teamEvolutionChartInstance = new Chart(evolutionCtx, {
+                type: 'line',
+                data: {
+                    labels: last7Days.map(date => new Date(date).toLocaleDateString('pt-BR', { weekday: 'short' })),
+                    datasets: [{
+                        label: 'Média Emocional da Equipe',
+                        data: dailyAverages,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#10b981',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    if (value === null) return 'Sem registros';
+                                    const moods = ['😡', '😞', '😐', '🙂', '😄'];
+                                    return `Média: ${value.toFixed(1)} ${moods[Math.round(value) - 1] || ''}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 5,
+                            min: 0,
+                            stepSize: 1,
+                            grid: { color: '#e5e5e5' },
+                            title: { display: true, text: 'Nível Emocional' }
+                        },
+                        x: { grid: { display: false }, title: { display: true, text: 'Dias' } }
+                    }
+                }
+            });
+        }
+        
+        const engagementRate = members.length > 0 ? Math.round((activeMembers / members.length) * 100) : 0;
+        const avgCheckins = members.length > 0 ? Math.round(totalCheckins / members.length) : 0;
+        
+        document.getElementById('engagementRate').textContent = `${engagementRate}%`;
+        document.getElementById('avgCheckins').textContent = avgCheckins;
+        document.getElementById('activeMembers').textContent = activeMembers;
+        document.getElementById('goalsCompleted').textContent = completedGoals;
+    } catch (error) { console.error('Erro ao carregar analytics:', error); }
+}
+
+async function showMemberDetails(memberId) {
+    try {
+        const response = await fetch(`${API_BASE}/member/${memberId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Falha ao carregar detalhes');
+        const member = await response.json();
+        
+        const modalHtml = `
+            <div class="modal active" id="memberModal" onclick="closeModal(event)">
+                <div class="modal-content" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-user"></i> ${escapeHtml(member.name)}</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="stats-grid" style="margin-bottom: 24px;">
+                            <div class="stat-card"><div class="stat-value">${member.emotions.length}</div><div class="stat-label">Total Registros</div></div>
+                            <div class="stat-card"><div class="stat-value">${member.goals.length}</div><div class="stat-label">Metas</div></div>
+                            <div class="stat-card"><div class="stat-value">${member.emotions.length > 0 ? Math.round(member.emotions.reduce((sum, e) => sum + getMoodScore(e.mood), 0) / member.emotions.length) : 0}/5</div><div class="stat-label">Média Emocional</div></div>
+                        </div>
+                        <div class="card"><div class="card-header"><h3 class="card-title">Histórico de Emoções</h3></div><div class="card-content"><div class="emotion-timeline">${member.emotions.length > 0 ? member.emotions.map(e => `<div class="emotion-entry"><div class="emotion-date">${formatDate(e.date)}</div><div class="emotion-mood"><span class="mood-emoji">${getMoodEmoji(e.mood)}</span><span>${getMoodLabel(e.mood)}</span></div>${e.comment ? `<div class="emotion-comment">${escapeHtml(e.comment)}</div>` : ''}</div>`).join('') : '<div class="no-data">Nenhum registro emocional</div>'}</div></div></div>
+                        <div class="card"><div class="card-header"><h3 class="card-title">Metas de Desenvolvimento</h3></div><div class="card-content"><div class="goals-list">${member.goals.length > 0 ? member.goals.map(g => `<div class="goal-item"><div class="goal-title">${escapeHtml(g.objective)}</div><div class="goal-progress"><div class="progress-bar"><div class="progress-fill" style="width: ${g.progress}%"></div></div><div class="progress-text">${g.progress}%</div></div></div>`).join('') : '<div class="no-data">Nenhuma meta definida</div>'}</div></div></div>
+                        <button class="btn btn-warning" onclick="unlockUserCheckin(${memberId}); closeModal();" style="width: 100%; margin-top: 16px; background: #f59e0b; color: white;">
+                            <i class="fas fa-unlock-alt"></i> Desbloquear Check-in
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    } catch (error) {
+        console.error('Erro ao carregar detalhes:', error);
+        showAlert('Erro ao carregar detalhes do funcionário', 'danger');
+    }
+}
+
+function closeModal(event) {
+    const modal = document.getElementById('memberModal');
+    if (modal && (!event || event.target === modal || event.target.classList.contains('modal-close'))) modal.remove();
+}
+
+// ========== FEEDBACK FUNCTIONS ==========
 let feedbackItems = [];
 
 async function submitFeedback() {
-    const content = document.getElementById('feedbackText').value;
-    if (!content.trim()) {
+    const content = document.getElementById('feedbackText')?.value;
+    if (!content?.trim()) {
         showAlert('Digite seu feedback', 'warning');
         return;
     }
-
     try {
         const response = await fetch(`${API_BASE}/feedback`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({ content })
         });
-
         if (response.ok) {
             document.getElementById('feedbackText').value = '';
-            showAlert('Feedback enviado anonimamente!', 'success');
-        } else {
-            const errorBody = await response.json();
-            showAlert(errorBody.error || 'Erro ao enviar feedback', 'danger');
+            showAlert('Feedback enviado com sucesso!', 'success');
+            loadUserResponses();
         }
     } catch (error) {
         showAlert('Erro ao enviar feedback', 'danger');
+    }
+}
+
+async function loadUserResponses() {
+    try {
+        const response = await fetch(`${API_BASE}/feedback/user`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const userFeedbacks = await response.json();
+            
+            const responsesContainer = document.getElementById('responsesList');
+            const responsesSection = document.getElementById('employeeResponses');
+            
+            if (userFeedbacks.length > 0 && responsesSection) {
+                responsesSection.classList.remove('hidden');
+                responsesContainer.innerHTML = userFeedbacks.map(f => `
+                    <div class="feedback-item responded">
+                        <div class="feedback-header">
+                            <div class="feedback-date">${formatDate(f.date)}</div>
+                            <div class="status-badge ${f.response ? 'status-responded' : 'status-unread'}">
+                                ${f.response ? 'Respondido' : 'Aguardando resposta'}
+                            </div>
+                        </div>
+                        <div class="feedback-content"><strong>Seu feedback:</strong> ${escapeHtml(f.content)}</div>
+                        ${f.response ? `
+                            <div class="feedback-response">
+                                <strong><i class="fas fa-reply"></i> Resposta do Gestor:</strong>
+                                <div style="margin-top: 8px; padding: 12px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #10b981;">
+                                    ${escapeHtml(f.response)}
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="alert alert-info" style="margin-top: 8px; padding: 8px 12px;">
+                                <i class="fas fa-clock"></i> Aguardando resposta do gestor...
+                            </div>
+                        `}
+                    </div>
+                `).join('');
+            } else if (responsesSection) {
+                responsesSection.classList.add('hidden');
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar respostas:', error);
     }
 }
 
@@ -535,36 +1114,30 @@ async function loadFeedback() {
     const isManager = user && user.type === 'manager';
     const managerSection = document.getElementById('managerFeedback');
     const employeeSection = document.getElementById('employeeFeedback');
+    const responsesSection = document.getElementById('employeeResponses');
     const subtitle = document.getElementById('feedbackSubtitle');
 
     if (!isManager) {
         if (managerSection) managerSection.classList.add('hidden');
         if (employeeSection) employeeSection.classList.remove('hidden');
-        if (subtitle) subtitle.textContent = 'Compartilhe suas sugestões de forma segura e anônima';
+        if (subtitle) subtitle.textContent = 'Compartilhe suas sugestões e veja as respostas dos gestores';
+        loadUserResponses();
         return;
     }
 
     if (managerSection) managerSection.classList.remove('hidden');
     if (employeeSection) employeeSection.classList.add('hidden');
+    if (responsesSection) responsesSection.classList.add('hidden');
     if (subtitle) subtitle.textContent = 'Gerencie feedbacks da equipe com estatísticas e filtros';
 
     try {
         const response = await fetch(`${API_BASE}/feedback`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-
-        if (!response.ok) {
-            throw new Error('Falha ao carregar feedbacks');
-        }
-
+        if (!response.ok) throw new Error('Falha ao carregar feedbacks');
         feedbackItems = await response.json();
         updateFeedbackStats(feedbackItems);
         renderFeedbackList();
-
-        const filterButton = document.getElementById('applyFilters');
-        if (filterButton) {
-            filterButton.onclick = loadFeedback;
-        }
     } catch (error) {
         console.error('Erro ao carregar feedback:', error);
         showAlert('Erro ao carregar feedback', 'danger');
@@ -572,45 +1145,24 @@ async function loadFeedback() {
 }
 
 function filterFeedbackItems() {
-    const statusFilter = document.getElementById('feedbackStatusFilter').value;
-    const dateFilter = document.getElementById('feedbackDateFilter').value;
-
+    const statusFilter = document.getElementById('feedbackStatusFilter')?.value;
+    const dateFilter = document.getElementById('feedbackDateFilter')?.value;
     const now = new Date();
     return feedbackItems.filter(item => {
-        let statusMatch = true;
-        let dateMatch = true;
-
-        if (statusFilter && statusFilter !== 'all') {
-            statusMatch = item.status === statusFilter;
-        }
-
+        let statusMatch = true, dateMatch = true;
+        if (statusFilter && statusFilter !== 'all') statusMatch = item.status === statusFilter;
         if (dateFilter && dateFilter !== 'all') {
             const itemDate = new Date(item.date);
             let periodStart = new Date(now);
-
             switch (dateFilter) {
-                case 'today':
-                    periodStart.setHours(0, 0, 0, 0);
-                    break;
-                case 'week':
-                    periodStart.setDate(now.getDate() - 6);
-                    periodStart.setHours(0, 0, 0, 0);
-                    break;
-                case 'month':
-                    periodStart.setMonth(now.getMonth() - 1);
-                    periodStart.setHours(0, 0, 0, 0);
-                    break;
-                case 'quarter':
-                    periodStart.setMonth(now.getMonth() - 3);
-                    periodStart.setHours(0, 0, 0, 0);
-                    break;
-                default:
-                    periodStart = new Date(0);
+                case 'today': periodStart.setHours(0,0,0,0); break;
+                case 'week': periodStart.setDate(now.getDate()-6); periodStart.setHours(0,0,0,0); break;
+                case 'month': periodStart.setMonth(now.getMonth()-1); periodStart.setHours(0,0,0,0); break;
+                case 'quarter': periodStart.setMonth(now.getMonth()-3); periodStart.setHours(0,0,0,0); break;
+                default: periodStart = new Date(0);
             }
-
             dateMatch = itemDate >= periodStart && itemDate <= now;
         }
-
         return statusMatch && dateMatch;
     });
 }
@@ -624,7 +1176,6 @@ function updateFeedbackStats(items) {
         const itemDate = new Date(item.date);
         return itemDate.getFullYear() === now.getFullYear() && itemDate.getMonth() === now.getMonth();
     }).length;
-
     document.getElementById('totalFeedback').textContent = total;
     document.getElementById('unreadFeedback').textContent = unread;
     document.getElementById('thisMonthFeedback').textContent = thisMonth;
@@ -635,40 +1186,28 @@ function renderFeedbackList() {
     const container = document.getElementById('feedbackList');
     const noData = document.getElementById('noFeedbackMessage');
     const filteredItems = filterFeedbackItems();
-
     if (!container || !noData) return;
-
     if (filteredItems.length === 0) {
         container.innerHTML = '';
         noData.classList.remove('hidden');
         return;
     }
-
     noData.classList.add('hidden');
     container.innerHTML = filteredItems.map(item => {
         const itemStatus = item.status || 'unread';
         const statusBadge = itemStatus === 'unread' ? 'Não lido' : itemStatus === 'responded' ? 'Respondido' : 'Lido';
         const statusClass = itemStatus === 'unread' ? 'status-unread' : itemStatus === 'responded' ? 'status-responded' : 'status-read';
-
         return `
-            <div class="feedback-item ${itemStatus === 'unread' ? 'unread' : itemStatus === 'responded' ? 'responded' : ''}" data-id="${item.id}">
+            <div class="feedback-item ${itemStatus === 'unread' ? 'unread' : ''}" data-id="${item.id}">
                 <div class="feedback-header">
                     <div class="feedback-date">${formatDate(item.date)}</div>
-                    <div class="feedback-status">
-                        <div class="status-badge ${statusClass}">${statusBadge}</div>
-                    </div>
+                    <div class="feedback-status"><div class="status-badge ${statusClass}">${statusBadge}</div></div>
                 </div>
-                <div class="feedback-content">${item.content}</div>
-                ${item.response ? `<div class="feedback-content"><strong>Resposta:</strong> ${item.response}</div>` : ''}
+                <div class="feedback-content">${escapeHtml(item.content)}</div>
+                ${item.response ? `<div class="feedback-response"><strong><i class="fas fa-reply"></i> Resposta:</strong><div style="margin-top: 8px; padding: 8px; background: #f0fdf4; border-radius: 8px;">${escapeHtml(item.response)}</div></div>` : ''}
                 <div class="feedback-actions">
-                    <button class="btn-feedback-action btn-mark-read" data-id="${item.id}" data-status="${itemStatus === 'unread' ? 'read' : 'unread'}">
-                        <i class="fas fa-envelope-open"></i>
-                        ${itemStatus === 'unread' ? 'Marcar como lido' : 'Marcar como não lido'}
-                    </button>
-                    <button class="btn-feedback-action btn-respond" data-id="${item.id}">
-                        <i class="fas fa-reply"></i>
-                        ${itemStatus === 'responded' ? 'Atualizar resposta' : 'Responder'}
-                    </button>
+                    <button class="btn-feedback-action btn-mark-read" data-id="${item.id}" data-status="${itemStatus === 'unread' ? 'read' : 'unread'}"><i class="fas fa-envelope-open"></i> ${itemStatus === 'unread' ? 'Marcar como lido' : 'Marcar como não lido'}</button>
+                    <button class="btn-feedback-action btn-respond" data-id="${item.id}"><i class="fas fa-reply"></i> ${itemStatus === 'responded' ? 'Atualizar resposta' : 'Responder'}</button>
                 </div>
                 <div class="response-form" id="responseForm-${item.id}" style="display:none;">
                     <textarea class="response-textarea" id="responseText-${item.id}" placeholder="Digite sua resposta..."></textarea>
@@ -677,10 +1216,8 @@ function renderFeedbackList() {
                         <button class="btn btn-secondary btn-cancel-response" data-id="${item.id}">Cancelar</button>
                     </div>
                 </div>
-            </div>
-        `;
+            </div>`;
     }).join('');
-
     attachFeedbackHandlers();
 }
 
@@ -693,38 +1230,29 @@ function attachFeedbackHandlers() {
             await loadFeedback();
         });
     });
-
     document.querySelectorAll('.btn-respond').forEach(button => {
         button.addEventListener('click', () => {
             const feedbackId = button.getAttribute('data-id');
             const form = document.getElementById(`responseForm-${feedbackId}`);
-            if (form) {
-                form.style.display = form.style.display === 'none' ? 'block' : 'none';
-            }
+            if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
         });
     });
-
     document.querySelectorAll('.btn-cancel-response').forEach(button => {
         button.addEventListener('click', () => {
             const feedbackId = button.getAttribute('data-id');
             const form = document.getElementById(`responseForm-${feedbackId}`);
-            if (form) {
-                form.style.display = 'none';
-            }
+            if (form) form.style.display = 'none';
         });
     });
-
     document.querySelectorAll('.btn-send-response').forEach(button => {
         button.addEventListener('click', async () => {
             const feedbackId = button.getAttribute('data-id');
             const textarea = document.getElementById(`responseText-${feedbackId}`);
             const responseText = textarea?.value || '';
-
             if (!responseText.trim()) {
                 showAlert('Digite uma resposta antes de enviar', 'warning');
                 return;
             }
-
             await respondFeedback(feedbackId, responseText.trim());
             await loadFeedback();
         });
@@ -735,22 +1263,14 @@ async function setFeedbackStatus(id, status) {
     try {
         const response = await fetch(`${API_BASE}/feedback/${id}/status`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ status })
         });
-
-        if (!response.ok) {
-            throw new Error('Falha ao atualizar status de feedback');
-        }
-
+        if (!response.ok) throw new Error('Falha ao atualizar status');
         showAlert('Status de feedback atualizado', 'success');
     } catch (error) {
         console.error(error);
         showAlert('Erro ao atualizar status de feedback', 'danger');
-        throw error;
     }
 }
 
@@ -758,26 +1278,18 @@ async function respondFeedback(id, responseText) {
     try {
         const response = await fetch(`${API_BASE}/feedback/${id}/respond`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ response: responseText })
         });
-
-        if (!response.ok) {
-            throw new Error('Falha ao responder feedback');
-        }
-
+        if (!response.ok) throw new Error('Falha ao responder');
         showAlert('Resposta enviada com sucesso', 'success');
     } catch (error) {
         console.error(error);
-        showAlert('Erro ao enviar resposta para feedback', 'danger');
-        throw error;
+        showAlert('Erro ao enviar resposta', 'danger');
     }
 }
 
-// Common Functions
+// ========== UTILITY FUNCTIONS ==========
 async function fetchEmotions() {
     const response = await fetch(`${API_BASE}/emotions`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -785,49 +1297,41 @@ async function fetchEmotions() {
     return await response.json();
 }
 
-// Utility Functions
 function getMoodEmoji(mood) {
-    const emojis = {
-        happy: '😄',
-        good: '🙂',
-        neutral: '😐',
-        stressed: '😞',
-        overloaded: '😡'
-    };
+    const emojis = { happy: '😄', good: '🙂', neutral: '😐', stressed: '😞', overloaded: '😡' };
     return emojis[mood] || '😐';
 }
 
 function getMoodLabel(mood) {
-    const labels = {
-        happy: 'Feliz',
-        good: 'Bem',
-        neutral: 'Neutro',
-        stressed: 'Estressado',
-        overloaded: 'Sobrecarregado'
-    };
+    const labels = { happy: 'Feliz', good: 'Bem', neutral: 'Neutro', stressed: 'Estressado', overloaded: 'Sobrecarregado' };
     return labels[mood] || 'Neutro';
 }
 
 function getMoodScore(mood) {
-    const scores = {
-        happy: 5,
-        good: 4,
-        neutral: 3,
-        stressed: 2,
-        overloaded: 1
-    };
+    const scores = { happy: 5, good: 4, neutral: 3, stressed: 2, overloaded: 1 };
     return scores[mood] || 3;
 }
 
 function formatDate(dateString) {
     const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    });
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function showAlert(message, type = 'info') {
     alert(message);
 }
+
+// Expor funções globalmente
+window.updateGoalProgress = updateGoalProgress;
+window.showMemberDetails = showMemberDetails;
+window.closeModal = closeModal;
+window.editTodayMood = editTodayMood;
+window.deleteEmotion = deleteEmotion;
+window.unlockUserCheckin = unlockUserCheckin;

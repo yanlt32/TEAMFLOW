@@ -6,35 +6,34 @@ async function seedDatabase() {
 
     try {
         // Hash passwords
-        const managerPassword = await bcrypt.hash('admin123', 12);
-        const employeePassword = await bcrypt.hash('user123', 12);
+        const adminPassword = await bcrypt.hash('admin123', 12);
+        const employeePassword = await bcrypt.hash('senha123', 12);
 
         // Insert test users
-        db.run(`
+        await db.runAsync(`
             INSERT OR IGNORE INTO users (name, email, password, type)
-            VALUES
+            VALUES 
                 ('Administrador', 'admin@mindtrack.com', ?, 'manager'),
                 ('João Silva', 'joao@empresa.com', ?, 'employee'),
                 ('Maria Santos', 'maria@empresa.com', ?, 'employee'),
-                ('Pedro Costa', 'pedro@empresa.com', ?, 'employee')
-        `, [managerPassword, employeePassword, employeePassword, employeePassword]);
+                ('Pedro Costa', 'pedro@mindtrack.com', ?, 'employee')
+        `, [adminPassword, employeePassword, employeePassword, employeePassword]);
 
-        // Insert sample emotions
-        const emotions = [
-            [2, 'happy', 'Dia produtivo e tranquilo!', '2024-01-15'],
-            [2, 'good', 'Reunião positiva com a equipe', '2024-01-14'],
-            [2, 'neutral', 'Dia normal, sem grandes emoções', '2024-01-13'],
-            [3, 'stressed', 'Muito trabalho acumulado', '2024-01-15'],
-            [3, 'good', 'Consegui entregar o projeto', '2024-01-14'],
-            [4, 'overloaded', 'Preciso de férias urgentemente', '2024-01-15'],
-            [4, 'neutral', 'Dia corrido mas ok', '2024-01-14']
-        ];
-
-        for (const emotion of emotions) {
-            db.run(`
+        // Get users IDs
+        const users = await db.allAsync('SELECT id, name FROM users WHERE type = "employee"');
+        
+        const today = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        
+        // Insert sample emotions for each user
+        for (const user of users) {
+            await db.runAsync(`
                 INSERT OR IGNORE INTO emotions (user_id, mood, comment, date)
-                VALUES (?, ?, ?, ?)
-            `, emotion);
+                VALUES 
+                    (?, 'happy', 'Ótimo dia! Muito produtivo.', ?),
+                    (?, 'good', 'Bom dia, algumas dificuldades mas superei.', ?),
+                    (?, 'neutral', 'Dia normal, sem grandes emoções.', ?)
+            `, [user.id, today, user.id, yesterday, user.id, new Date(Date.now() - 172800000).toISOString().split('T')[0]]);
         }
 
         // Insert sample goals
@@ -43,11 +42,12 @@ async function seedDatabase() {
             [2, 'Completar certificação técnica', 60],
             [3, 'Organizar rotina de trabalho', 40],
             [3, 'Aprender nova tecnologia', 25],
-            [4, 'Reduzir tempo em reuniões improdutivas', 80]
+            [4, 'Reduzir tempo em reuniões improdutivas', 80],
+            [4, 'Aumentar produtividade diária', 50]
         ];
 
         for (const goal of goals) {
-            db.run(`
+            await db.runAsync(`
                 INSERT OR IGNORE INTO goals (user_id, objective, progress)
                 VALUES (?, ?, ?)
             `, goal);
@@ -59,22 +59,30 @@ async function seedDatabase() {
             'Gostaria de mais opções de humor no check-in diário.',
             'O dashboard gerencial é excelente para insights.',
             'Poderia ter lembretes automáticos para o check-in.',
-            'Interface muito intuitiva e profissional.'
+            'Interface muito intuitiva e profissional.',
+            'A funcionalidade de metas PDI é muito boa.',
+            'O gráfico de evolução semanal ajuda a visualizar o progresso.'
         ];
 
         for (const feedback of feedbacks) {
-            db.run(`
-                INSERT OR IGNORE INTO feedback (content, date)
-                VALUES (?, datetime('now', '-' || (RANDOM() % 30) || ' days'))
-            `, [feedback]);
+            const randomDays = Math.floor(Math.random() * 30);
+            const feedbackDate = new Date(Date.now() - (randomDays * 86400000)).toISOString();
+            await db.runAsync(`
+                INSERT INTO feedback (content, date, status)
+                VALUES (?, ?, ?)
+            `, [feedback, feedbackDate, randomDays < 10 ? 'unread' : 'read']);
         }
 
         console.log('✅ Seed concluído com sucesso!');
-        console.log('👤 Usuários de teste criados:');
+        console.log('\n👤 Usuários de teste criados:');
         console.log('   Manager: admin@mindtrack.com / admin123');
-        console.log('   Employee: joao@empresa.com / user123');
-        console.log('   Employee: maria@empresa.com / user123');
-        console.log('   Employee: pedro@empresa.com / user123');
+        console.log('   Employee: joao@empresa.com / senha123');
+        console.log('   Employee: maria@empresa.com / senha123');
+        console.log('   Employee: pedro@mindtrack.com / senha123');
+        console.log('\n📊 Dados de exemplo inseridos:');
+        console.log('   - Emoções registradas');
+        console.log('   - Metas PDI criadas');
+        console.log('   - Feedbacks anônimos');
 
     } catch (error) {
         console.error('❌ Erro durante o seed:', error);

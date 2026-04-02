@@ -38,7 +38,7 @@ db.serialize(() => {
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   )`);
 
-  // Tabela de feedback (anônimo) - VERSÃO COMPLETA
+  // Tabela de feedback (anônimo)
   db.run(`CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     content TEXT NOT NULL,
@@ -64,85 +64,32 @@ db.serialize(() => {
 
     console.log('Verificando estrutura da tabela feedback...');
     
-    // Verificar colunas existentes
     const hasStatus = columns.some(col => col.name === 'status');
     const hasResponse = columns.some(col => col.name === 'response');
     const hasRespondedBy = columns.some(col => col.name === 'responded_by');
     const hasRespondedAt = columns.some(col => col.name === 'responded_at');
     const hasUpdatedAt = columns.some(col => col.name === 'updated_at');
 
-    // Adicionar coluna status se não existir
     if (!hasStatus) {
-      console.log('Adicionando coluna status na tabela feedback...');
-      db.run(`ALTER TABLE feedback ADD COLUMN status TEXT DEFAULT 'unread'`, (alterErr) => {
-        if (alterErr) {
-          console.warn('Erro ao adicionar coluna status:', alterErr.message);
-        } else {
-          console.log('✅ Coluna status adicionada com sucesso');
-        }
-      });
+      db.run(`ALTER TABLE feedback ADD COLUMN status TEXT DEFAULT 'unread'`);
     }
-
-    // Adicionar coluna response se não existir
     if (!hasResponse) {
-      console.log('Adicionando coluna response na tabela feedback...');
-      db.run(`ALTER TABLE feedback ADD COLUMN response TEXT`, (alterErr) => {
-        if (alterErr) {
-          console.warn('Erro ao adicionar coluna response:', alterErr.message);
-        } else {
-          console.log('✅ Coluna response adicionada com sucesso');
-        }
-      });
+      db.run(`ALTER TABLE feedback ADD COLUMN response TEXT`);
     }
-
-    // Adicionar coluna responded_by se não existir
     if (!hasRespondedBy) {
-      console.log('Adicionando coluna responded_by na tabela feedback...');
-      db.run(`ALTER TABLE feedback ADD COLUMN responded_by INTEGER`, (alterErr) => {
-        if (alterErr) {
-          console.warn('Erro ao adicionar coluna responded_by:', alterErr.message);
-        } else {
-          console.log('✅ Coluna responded_by adicionada com sucesso');
-        }
-      });
+      db.run(`ALTER TABLE feedback ADD COLUMN responded_by INTEGER`);
     }
-
-    // Adicionar coluna responded_at se não existir
     if (!hasRespondedAt) {
-      console.log('Adicionando coluna responded_at na tabela feedback...');
-      db.run(`ALTER TABLE feedback ADD COLUMN responded_at DATETIME`, (alterErr) => {
-        if (alterErr) {
-          console.warn('Erro ao adicionar coluna responded_at:', alterErr.message);
-        } else {
-          console.log('✅ Coluna responded_at adicionada com sucesso');
-        }
-      });
+      db.run(`ALTER TABLE feedback ADD COLUMN responded_at DATETIME`);
     }
-
-    // Adicionar coluna updated_at se não existir (SEM DEFAULT VALUE para evitar erro)
     if (!hasUpdatedAt) {
-      console.log('Adicionando coluna updated_at na tabela feedback...');
-      db.run(`ALTER TABLE feedback ADD COLUMN updated_at DATETIME`, (alterErr) => {
-        if (alterErr) {
-          console.warn('Erro ao adicionar coluna updated_at:', alterErr.message);
-        } else {
-          console.log('✅ Coluna updated_at adicionada com sucesso');
-          // Após adicionar a coluna, atualizar registros existentes com a data atual
-          db.run(`UPDATE feedback SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL`, (updateErr) => {
-            if (updateErr) {
-              console.warn('Erro ao atualizar valores de updated_at:', updateErr.message);
-            } else {
-              console.log('✅ Valores de updated_at inicializados com sucesso');
-            }
-          });
-        }
+      db.run(`ALTER TABLE feedback ADD COLUMN updated_at DATETIME`, () => {
+        db.run(`UPDATE feedback SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL`);
       });
     }
-
-    console.log('✅ Verificação da tabela feedback concluída');
   });
 
-  // Criar índices para melhor performance
+  // Criar índices
   db.run(`CREATE INDEX IF NOT EXISTS idx_emotions_user_id ON emotions(user_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_emotions_date ON emotions(date)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_goals_user_id ON goals(user_id)`);
@@ -153,7 +100,7 @@ db.serialize(() => {
   console.log('✅ Banco de dados inicializado com sucesso');
 });
 
-// Função de utilidade para executar queries com Promise
+// Funções Promise
 db.getAsync = (sql, params = []) => {
   return new Promise((resolve, reject) => {
     db.get(sql, params, (err, result) => {
@@ -181,12 +128,10 @@ db.runAsync = (sql, params = []) => {
   });
 };
 
-// Tratamento de erros do banco de dados
 db.on('error', (err) => {
   console.error('Erro no banco de dados:', err.message);
 });
 
-// Encerramento gracioso
 process.on('SIGINT', () => {
   console.log('Fechando conexão com o banco de dados...');
   db.close((err) => {
