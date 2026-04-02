@@ -9,25 +9,7 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
-      - key: FRONTEND_URL
-        fromService:
-          type: web
-          name: mindtrack-frontend
-          property: host
 
-  - type: web
-    name: mindtrack-frontend
-    runtime: static
-    buildCommand: echo "No build step required"
-    staticPublishPath: ./frontend
-    routes:
-      - type: proxy
-        source: /api/*
-        destination: https://mindtrack-api-pqvu.onrender.com/api/:splat
-
-  - type: pserv
-    name: mindtrack-db
-    runtime: postgres
     databaseName: mindtrack_prod
     user: mindtrack_user
     databaseUrl: mindtrack_db_url
