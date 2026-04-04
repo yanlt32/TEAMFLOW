@@ -9,11 +9,11 @@
     "node": ">=16.0.0"
   },
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "node backend/server-prod.js",
+    "dev": "node backend/server-prod.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint server.js",
-    "format": "prettier --write server-prod.js",
+    "lint": "eslint backend/server-prod.js",
+    "format": "prettier --write backend/server-prod.js",
     "setup": "node setup.js",
     "seed": "node seed.js"
   },
