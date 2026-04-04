@@ -326,6 +326,26 @@ app.get('/api/member/:id', verifyToken, (req, res) => {
     });
 });
 
+// ============ UNLOCK CHECK-IN (MANAGER ONLY) ============
+app.post('/api/unlock-checkin/:userId', verifyToken, (req, res) => {
+    // Apenas managers podem desbloquear check-in
+    if (req.userType !== 'manager') {
+        return res.status(403).json({ error: 'Acesso negado: apenas gestores podem desbloquear' });
+    }
+    
+    const userId = req.params.userId;
+    
+    // Aqui você poderia registrar a ação de desbloquear no banco de dados se desejado
+    // Por enquanto, apenas confirmamos que a ação foi autorizada
+    console.log(`🔓 Gestor ${req.userId} desbloqueou check-in do usuário ${userId}`);
+    
+    res.json({ 
+        message: 'Check-in desbloqueado com sucesso',
+        userId: userId,
+        timestamp: new Date().toISOString()
+    });
+});
+
 // ============ FALLBACK ============
 app.get('*', (req, res) => {
     if (req.path.startsWith('/api/')) {

@@ -235,10 +235,16 @@ body {
     display: none !important;
 }
 
-/* Role-based visibility defaults */
-.employee-only,
-.manager-only {
+/* Role-based visibility - only applied before initialization */
+/* After initializeApp(), sections are shown via showSection() */
+.section.hidden.employee-only,
+.section.hidden.manager-only {
     display: none !important;
+}
+
+/* When section is shown and not hidden, display it */
+.section:not(.hidden) {
+    display: block !important;
 }
 
 @keyframes fadeIn {

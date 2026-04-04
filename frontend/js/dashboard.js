@@ -67,7 +67,7 @@ function initializeApp() {
         // Estratégia 1: CSS classes
         document.querySelectorAll('.employee-only').forEach(el => {
             if (el) {
-                el.style.display = 'none' !important;
+                el.style.setProperty('display', 'none', 'important');
                 el.classList.add('hidden');
             }
         });
@@ -75,19 +75,19 @@ function initializeApp() {
         // Estratégia 2: SHOW manager elements
         document.querySelectorAll('.manager-only').forEach(el => {
             if (el) {
-                el.style.display = 'block' !important;
+                el.style.setProperty('display', 'block', 'important');
                 el.classList.remove('hidden');
             }
         });
         
         // Estratégia 3: Hide specific nav items by selecting their parent li with employee-only
         document.querySelectorAll('.nav-item.employee-only').forEach(navItem => {
-            navItem.style.display = 'none' !important;
+            navItem.style.setProperty('display', 'none', 'important');
         });
         
         // Estratégia 4: Show manager nav items
         document.querySelectorAll('.nav-item.manager-only').forEach(navItem => {
-            navItem.style.display = 'flex' !important;
+            navItem.style.setProperty('display', 'flex', 'important');
         });
         
         loadTeamMembers();
@@ -103,7 +103,7 @@ function initializeApp() {
         // Show team section explicitly
         const teamSection = document.getElementById('teamSection');
         if (teamSection) {
-            teamSection.style.display = 'block' !important;
+            teamSection.style.setProperty('display', 'block', 'important');
             teamSection.classList.remove('hidden');
         }
     } else {
@@ -112,7 +112,7 @@ function initializeApp() {
         // Show employee sections
         document.querySelectorAll('.employee-only').forEach(el => {
             if (el) {
-                el.style.display = 'block' !important;
+                el.style.setProperty('display', 'block', 'important');
                 el.classList.remove('hidden');
             }
         });
@@ -120,19 +120,19 @@ function initializeApp() {
         // Hide manager sections
         document.querySelectorAll('.manager-only').forEach(el => {
             if (el) {
-                el.style.display = 'none' !important;
+                el.style.setProperty('display', 'none', 'important');
                 el.classList.add('hidden');
             }
         });
         
         // Hide manager nav items
         document.querySelectorAll('.nav-item.manager-only').forEach(navItem => {
-            navItem.style.display = 'none' !important;
+            navItem.style.setProperty('display', 'none', 'important');
         });
         
         // Show employee nav items
         document.querySelectorAll('.nav-item.employee-only').forEach(navItem => {
-            navItem.style.display = 'flex' !important;
+            navItem.style.setProperty('display', 'flex', 'important');
         });
         
         // Set dashboard as active nav link for employees
@@ -182,13 +182,59 @@ function unlockCheckin() {
 }
 
 // Admin unlock function (expor globalmente)
-window.unlockUserCheckin = function(userId) {
-    localStorage.removeItem(`checkin_lock_${userId}`);
-    if (user?.id === userId) {
-        checkinLocked = false;
-        checkinLockExpiry = null;
-        checkTodayMood();
-        showAlert('Check-in desbloqueado com sucesso!', 'success');
+window.unlockUserCheckin = async function(userId) {
+    try {
+        console.log(`🔓 Desbloqueando check-in para usuário ${userId}...`);
+        
+        // Chamar o backend para autorizar/registrar o desbloquear
+        const response = await fetch(`${API_BASE}/unlock-checkin/${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Erro ao desbloquear check-in');
+        }
+        
+        const result = await response.json();
+        console.log('✅ Response do servidor:', result);
+        
+        // Remover o lock do localStorage
+        localStorage.removeItem(`checkin_lock_${userId}`);
+        
+        // Se for o usuário atualmente logado, atualizar a interface
+        if (user?.id === userId) {
+            checkinLocked = false;
+            checkinLockExpiry = null;
+            
+            // Recarregar a interface de check-in
+            checkTodayMood();
+            
+            // Mostrar feedback
+            showAlert(`✅ Check-in desbloqueado! Você pode fazer novo registro agora.`, 'success');
+            
+            // Se o usuário estiver na seção de check-in, atualizar imediatamente
+            const checkinSection = document.getElementById('checkinSection');
+            if (checkinSection && !checkinSection.classList.contains('hidden')) {
+                setTimeout(() => checkTodayMood(), 100);
+            }
+        } else {
+            // Se for outro usuário, apenas mostrar mensagem de sucesso
+            showAlert(`✅ Check-in desbloqueado para o usuário! Próximo registro disponível.`, 'success');
+            
+            // Recarregar a lista de membros da equipe para atualizar o status visual
+            setTimeout(() => {
+                loadTeamMembers();
+                loadTeamAnalytics();
+            }, 500);
+        }
+    } catch (error) {
+        console.error('❌ Erro ao desbloquear check-in:', error);
+        showAlert(`Erro: ${error.message}`, 'danger');
     }
 };
 
@@ -279,14 +325,19 @@ function showSection(sectionName) {
         return;
     }
     
+    // Ocultar TODAS as seções
     document.querySelectorAll('.section').forEach(section => {
         section.classList.add('hidden');
+        section.style.display = 'none';
     });
     
     const targetSection = document.getElementById(sectionName + 'Section');
     if (targetSection) {
+        // Remover hidden class e mostrar a seção
         targetSection.classList.remove('hidden');
-        targetSection.style.display = 'block';
+        targetSection.style.setProperty('display', 'block', 'important');
+        
+        // Carregar o conteúdo específico dessa seção
         switch(sectionName) {
             case 'dashboard': 
                 if (user.type !== 'manager') loadDashboard(); 
@@ -545,6 +596,12 @@ function showSuggestion(mood) {
         suggestionEl.classList.remove('hidden');
         setTimeout(() => suggestionEl.classList.add('hidden'), 5000);
     }
+}
+
+// ========== CHECK-IN FUNCTIONS ==========
+function loadCheckin() {
+    // Initialize the daily check-in form
+    checkTodayMood();
 }
 
 // ========== DASHBOARD FUNCTIONS ==========
@@ -1451,6 +1508,7 @@ function attachFeedbackHandlers() {
     
     // Marcar que handlers foram anexados
     container._feedbackHandlersAttached = true;
+}
 
 async function setFeedbackStatus(id, status) {
     try {
