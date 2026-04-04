@@ -232,8 +232,25 @@ app.get('/api/feedback', verifyToken, (req, res) => {
 });
 
 app.get('/api/feedback/user', verifyToken, (req, res) => {
-    db.all('SELECT * FROM feedback WHERE response IS NOT NULL ORDER BY date DESC', [], (err, rows) => {
-        res.json(rows || []);
+    db.all("PRAGMA table_info(feedback)", [], (err, columns) => {
+        if (err) {
+            console.error('Erro SQL ao verificar schema de feedback:', err);
+            return res.status(500).json({ error: 'Erro ao buscar respostas', details: err.message });
+        }
+
+        const columnNames = columns.map(column => column.name);
+        if (!columnNames.includes('response')) {
+            console.warn('Coluna response não existe em feedback; retornando lista vazia');
+            return res.json([]);
+        }
+
+        db.all('SELECT * FROM feedback WHERE response IS NOT NULL ORDER BY date DESC', [], (err, rows) => {
+            if (err) {
+                console.error('Erro SQL em /api/feedback/user:', err);
+                return res.status(500).json({ error: 'Erro ao buscar respostas', details: err.message });
+            }
+            res.json(rows || []);
+        });
     });
 });
 
@@ -247,8 +264,30 @@ app.put('/api/feedback/:id/respond', verifyToken, (req, res) => {
         'UPDATE feedback SET response = ?, status = ? WHERE id = ?',
         [response, 'responded', req.params.id],
         function(err) {
-            if (err) return res.status(500).json({ error: 'Erro ao responder' });
+            if (err) {
+                console.error('Erro SQL ao responder feedback:', err);
+                return res.status(500).json({ error: 'Erro ao responder', details: err.message });
+            }
             res.json({ message: 'Respondido' });
+        }
+    );
+});
+
+app.put('/api/feedback/:id/status', verifyToken, (req, res) => {
+    if (req.userType !== 'manager') {
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
+    const { status } = req.body;
+    
+    db.run(
+        'UPDATE feedback SET status = ? WHERE id = ?',
+        [status, req.params.id],
+        function(err) {
+            if (err) {
+                console.error('Erro SQL ao atualizar status de feedback:', err);
+                return res.status(500).json({ error: 'Erro ao atualizar status', details: err.message });
+            }
+            res.json({ message: 'Status atualizado' });
         }
     );
 });

@@ -63,6 +63,34 @@ db.serialize(() => {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Garantir que colunas recentes existam em bases antigas
+    db.serialize(() => {
+        const requiredFeedbackColumns = ['status', 'response', 'responded_by', 'responded_at', 'updated_at'];
+        db.all("PRAGMA table_info(feedback)", [], (err, rows) => {
+            if (err) {
+                console.error('Erro ao verificar schema de feedback:', err);
+                return;
+            }
+            const existingColumns = rows.map(column => column.name);
+            requiredFeedbackColumns.forEach(column => {
+                if (!existingColumns.includes(column)) {
+                    const alterSql = `ALTER TABLE feedback ADD COLUMN ${column} TEXT`;
+                    if (column === 'response' || column === 'responded_by' || column === 'responded_at') {
+                        db.run(alterSql, err => {
+                            if (err) console.error(`Erro ao adicionar coluna ${column}:`, err);
+                            else console.log(`✅ Coluna ${column} adicionada à tabela feedback`);
+                        });
+                    } else {
+                        db.run(`ALTER TABLE feedback ADD COLUMN ${column} TEXT DEFAULT 'unread'`, err => {
+                            if (err) console.error(`Erro ao adicionar coluna ${column}:`, err);
+                            else console.log(`✅ Coluna ${column} adicionada à tabela feedback`);
+                        });
+                    }
+                }
+            });
+        });
+    });
+
     console.log('✅ Tabelas criadas/verificadas com sucesso');
 });
 
