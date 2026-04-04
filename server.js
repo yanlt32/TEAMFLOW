@@ -504,6 +504,64 @@ app.post('/api/feedback', (req, res) => {
     });
 });
 
+app.get('/api/feedback/user', verifyToken, (req, res) => {
+    db.all('SELECT * FROM feedback WHERE response IS NOT NULL ORDER BY date DESC', [], (err, rows) => {
+        if (err) {
+            return res.status(500).json({
+                error: 'Erro ao buscar respostas',
+                code: 'INTERNAL_ERROR'
+            });
+        }
+        res.json(rows || []);
+    });
+});
+
+app.put('/api/feedback/:id/respond', verifyToken, requireRole(['manager']), (req, res) => {
+    const { response } = req.body;
+    if (!response) {
+        return res.status(400).json({
+            error: 'Resposta é obrigatória',
+            code: 'MISSING_RESPONSE'
+        });
+    }
+
+    db.run('UPDATE feedback SET response = ?, status = ? WHERE id = ?', [response, 'responded', req.params.id], function(err) {
+        if (err) {
+            return res.status(500).json({
+                error: 'Erro ao responder feedback',
+                code: 'INTERNAL_ERROR'
+            });
+        }
+        res.json({ message: 'Feedback respondido' });
+    });
+});
+
+app.put('/api/feedback/:id/status', verifyToken, requireRole(['manager']), (req, res) => {
+    const { status } = req.body;
+    if (!status) {
+        return res.status(400).json({
+            error: 'Status é obrigatório',
+            code: 'MISSING_STATUS'
+        });
+    }
+
+    db.run('UPDATE feedback SET status = ? WHERE id = ?', [status, req.params.id], function(err) {
+        if (err) {
+            return res.status(500).json({
+                error: 'Erro ao atualizar status',
+                code: 'INTERNAL_ERROR'
+            });
+        }
+        res.json({ message: 'Status atualizado' });
+    });
+});
+
+app.post('/api/unlock-checkin/:userId', verifyToken, requireRole(['manager']), (req, res) => {
+    const userId = req.params.userId;
+    console.log(`🔓 Gestor ${req.user.id} desbloqueou check-in do usuário ${userId}`);
+    res.json({ message: 'Check-in desbloqueado com sucesso', userId, timestamp: new Date().toISOString() });
+});
+
 // Analytics overview (manager only)
 app.get('/api/analytics/overview', verifyToken, requireRole(['manager']), (req, res) => {
     // Get total users

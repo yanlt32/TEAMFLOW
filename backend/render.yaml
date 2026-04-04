@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: mindtrack-api
+    name: mindtrack-api-backend
     runtime: node
     buildCommand: npm install
-    startCommand: node backend/server-prod.js
+    startCommand: node server-prod.js
     envVars:
       - key: NODE_ENV
         value: production
