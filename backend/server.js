@@ -97,10 +97,28 @@ app.post('/api/login', async (req, res) => {
             { expiresIn: '24h' }
         );
         
+        console.log(`💫 Login bem-sucedido: ${email} (${user.type})`);
         res.json({
             token,
             user: { id: user.id, name: user.name, email: user.email, type: user.type }
         });
+    });
+});
+
+// Verificar perfil do usuário
+app.get('/api/profile', verifyToken, (req, res) => {
+    db.get('SELECT id, name, email, type FROM users WHERE id = ?', [req.userId], (err, user) => {
+        if (err) {
+            console.error('Erro ao buscar perfil:', err);
+            return res.status(500).json({ error: 'Erro interno' });
+        }
+        
+        if (!user) {
+            return res.status(404).json({ error: 'Usuário não encontrado' });
+        }
+        
+        console.log(`📋 Perfil consultado: ${user.name} (${user.type})`);
+        res.json({ user });
     });
 });
 
@@ -208,7 +226,17 @@ app.put('/api/goals/:id', verifyToken, (req, res) => {
         }
     );
 });
-
+app.delete('/api/goals/:id', verifyToken, (req, res) => {
+    db.run(
+        'DELETE FROM goals WHERE id = ? AND user_id = ?',
+        [req.params.id, req.userId],
+        function(err) {
+            if (err) return res.status(500).json({ error: 'Erro ao deletar' });
+            if (this.changes === 0) return res.status(404).json({ error: 'Meta não encontrada' });
+            res.json({ message: 'Meta removida com sucesso' });
+        }
+    );
+});
 // ============ ROTAS DE FEEDBACK ============
 app.post('/api/feedback', (req, res) => {
     const { content } = req.body;

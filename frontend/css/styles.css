@@ -232,7 +232,13 @@ body {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
+}
+
+/* Role-based visibility defaults */
+.employee-only,
+.manager-only {
+    display: none !important;
 }
 
 @keyframes fadeIn {

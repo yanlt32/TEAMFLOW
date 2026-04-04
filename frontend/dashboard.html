@@ -86,7 +86,7 @@
     <main class="main-content">
         <div class="container">
             <!-- Dashboard Section (Employee) -->
-            <section id="dashboardSection" class="section fade-in">
+            <section id="dashboardSection" class="section fade-in employee-only">
                 <div class="page-header">
                     <h1 class="page-title">Meu Dashboard</h1>
                     <p class="page-subtitle">Visão geral do seu bem-estar emocional</p>
@@ -149,7 +149,7 @@
             </section>
 
             <!-- Check-in Section (Employee) -->
-            <section id="checkinSection" class="section hidden">
+            <section id="checkinSection" class="section hidden employee-only">
                 <div class="page-header">
                     <h1 class="page-title">Check-in Diário</h1>
                     <p class="page-subtitle" id="checkinSubtitle">Como você está se sentindo hoje?</p>
@@ -208,7 +208,7 @@
             </section>
 
             <!-- History Section (Employee) -->
-            <section id="historySection" class="section hidden">
+            <section id="historySection" class="section hidden employee-only">
                 <div class="page-header">
                     <h1 class="page-title">Histórico Emocional</h1>
                     <p class="page-subtitle">Acompanhe sua evolução emocional ao longo do tempo</p>
@@ -226,7 +226,7 @@
             </section>
 
             <!-- Goals Section (Employee) -->
-            <section id="goalsSection" class="section hidden">
+            <section id="goalsSection" class="section hidden employee-only">
                 <div class="page-header">
                     <h1 class="page-title">Metas de Desenvolvimento</h1>
                     <p class="page-subtitle">Defina e acompanhe suas metas pessoais de crescimento</p>
@@ -259,10 +259,20 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card" id="completedGoalsCard" style="display: none;">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-trophy" style="color: #f59e0b; margin-right: 8px;"></i>Metas Concluídas</h3>
+                        <p class="card-subtitle">Suas realizações e conquistas</p>
+                    </div>
+                    <div class="card-content">
+                        <div id="completedGoalsList" class="goals-list"></div>
+                    </div>
+                </div>
             </section>
 
             <!-- Team Management Section (Manager) -->
-            <section id="teamSection" class="section hidden">
+            <section id="teamSection" class="section hidden manager-only">
                 <div class="page-header">
                     <h1 class="page-title">Gestão de Equipe</h1>
                     <p class="page-subtitle">Conheça e acompanhe o bem-estar da sua equipe</p>
@@ -301,7 +311,7 @@
             </section>
 
             <!-- Team Analytics Section (Manager) -->
-            <section id="teamAnalyticsSection" class="section hidden">
+            <section id="teamAnalyticsSection" class="section hidden manager-only">
                 <div class="page-header">
                     <h1 class="page-title">Análise da Equipe</h1>
                     <p class="page-subtitle">Insights e tendências do bem-estar da equipe</p>
@@ -361,8 +371,8 @@
             <!-- Feedback Section (Common) -->
             <section id="feedbackSection" class="section hidden">
                 <div class="page-header">
-                    <h1 class="page-title">Feedback</h1>
-                    <p class="page-subtitle" id="feedbackSubtitle">Compartilhe suas sugestões de forma segura</p>
+                    <h1 class="page-title">Feedback Anônimo</h1>
+                    <p class="page-subtitle" id="feedbackSubtitle">Compartilhe suas sugestões de forma segura e anônima</p>
                 </div>
 
                 <!-- Employee Feedback Form -->
@@ -374,7 +384,7 @@
                         </div>
                         <div class="alert alert-warning">
                             <i class="fas fa-shield-alt"></i>
-                            <span>Seu feedback é anônimo e será visto apenas pelos gestores</span>
+                            <span><strong>Feedback Anônimo:</strong> Seu feedback é completamente anônimo e será visto apenas pelos gestores</span>
                         </div>
                         <button class="btn btn-primary" id="submitFeedback">
                             <i class="fas fa-paper-plane"></i> Enviar Feedback

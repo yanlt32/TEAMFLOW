@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     token = localStorage.getItem('token');
     user = JSON.parse(localStorage.getItem('user'));
     
+    console.log('👤 Usuário carregado:', user);
+    console.log('🔑 Token:', token ? 'Presente' : 'Ausente');
+    
     // Aguardar configuração da API
     if (window.APP_CONFIG) {
         API_BASE = window.APP_CONFIG.API_URL;
@@ -34,58 +37,113 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     console.log('✅ API configurada para:', API_BASE);
     
-    if (!token) {
+    if (!token || !user) {
+        console.warn('❌ Sem token ou usuário');
         window.location.href = 'index.html';
         return;
     }
     
+    console.log('📋 Tipo de usuário (localStorage):', user.type);
+    
+    // ✅ Combinação de token válido + tipo de usuário é suficiente para validar
     initializeApp();
 });
 
 function initializeApp() {
+    console.log('🔧 Inicializando app como:', user?.type === 'manager' ? 'ADMINISTRADOR' : 'FUNCIONÁRIO');
+    
+    // Define o tipo de usuário no body para uso em CSS/JS
+    document.body.setAttribute('data-user-type', user?.type || 'employee');
+    
     setupNavigation();
     setupEventListeners();
     updateUserInfo();
     loadCheckinLock(); // Carregar status do lock
     
-    const teamNavItem = document.getElementById('teamNav');
-    const checkinNav = document.querySelector('.nav-link[data-section="checkin"]');
-    const historyNav = document.querySelector('.nav-link[data-section="history"]');
-    const goalsNav = document.querySelector('.nav-link[data-section="goals"]');
-    
     if (user.type === 'manager') {
-        document.querySelectorAll('.employee-only').forEach(el => {
-            if (el) el.style.display = 'none';
-        });
-        document.querySelectorAll('.manager-only').forEach(el => {
-            if (el) el.style.display = 'block';
-        });
-        if (teamNavItem) teamNavItem.style.display = 'block';
+        console.log('👨‍💼 Configurando interface de ADMINISTRADOR');
         
-        if (checkinNav && checkinNav.parentElement) checkinNav.parentElement.style.display = 'none';
-        if (historyNav && historyNav.parentElement) historyNav.parentElement.style.display = 'none';
-        if (goalsNav && goalsNav.parentElement) goalsNav.parentElement.style.display = 'none';
+        // ===== HIDE ALL EMPLOYEE ELEMENTS =====
+        // Estratégia 1: CSS classes
+        document.querySelectorAll('.employee-only').forEach(el => {
+            if (el) {
+                el.style.display = 'none' !important;
+                el.classList.add('hidden');
+            }
+        });
+        
+        // Estratégia 2: SHOW manager elements
+        document.querySelectorAll('.manager-only').forEach(el => {
+            if (el) {
+                el.style.display = 'block' !important;
+                el.classList.remove('hidden');
+            }
+        });
+        
+        // Estratégia 3: Hide specific nav items by selecting their parent li with employee-only
+        document.querySelectorAll('.nav-item.employee-only').forEach(navItem => {
+            navItem.style.display = 'none' !important;
+        });
+        
+        // Estratégia 4: Show manager nav items
+        document.querySelectorAll('.nav-item.manager-only').forEach(navItem => {
+            navItem.style.display = 'flex' !important;
+        });
         
         loadTeamMembers();
         loadTeamAnalytics();
         
-        const teamLink = document.querySelector('.nav-link[data-section="team"]');
-        if (teamLink) teamLink.classList.add('active');
+        // Set team as active nav link
+        const teamLink = document.querySelector('[data-section="team"]');
+        if (teamLink) {
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            teamLink.classList.add('active');
+        }
+        
+        // Show team section explicitly
+        const teamSection = document.getElementById('teamSection');
+        if (teamSection) {
+            teamSection.style.display = 'block' !important;
+            teamSection.classList.remove('hidden');
+        }
     } else {
+        console.log('👨‍💼 Configurando interface de FUNCIONÁRIO');
+        
+        // Show employee sections
         document.querySelectorAll('.employee-only').forEach(el => {
-            if (el) el.style.display = 'block';
+            if (el) {
+                el.style.display = 'block' !important;
+                el.classList.remove('hidden');
+            }
         });
+        
+        // Hide manager sections
         document.querySelectorAll('.manager-only').forEach(el => {
-            if (el) el.style.display = 'none';
+            if (el) {
+                el.style.display = 'none' !important;
+                el.classList.add('hidden');
+            }
         });
-        if (teamNavItem) teamNavItem.style.display = 'none';
+        
+        // Hide manager nav items
+        document.querySelectorAll('.nav-item.manager-only').forEach(navItem => {
+            navItem.style.display = 'none' !important;
+        });
+        
+        // Show employee nav items
+        document.querySelectorAll('.nav-item.employee-only').forEach(navItem => {
+            navItem.style.display = 'flex' !important;
+        });
+        
+        // Set dashboard as active nav link for employees
+        const dashboardLink = document.querySelector('[data-section="dashboard"]');
+        if (dashboardLink) {
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            dashboardLink.classList.add('active');
+        }
         
         loadDashboard();
         checkTodayMood();
-        loadUserResponses();
-        
-        const dashboardLink = document.querySelector('.nav-link[data-section="dashboard"]');
-        if (dashboardLink) dashboardLink.classList.add('active');
     }
 }
 
@@ -206,6 +264,21 @@ function updateUserInfo() {
 }
 
 function showSection(sectionName) {
+    // Definir quais seções cada perfil pode acessar
+    const allowedSections = {
+        'employee': ['dashboard', 'checkin', 'history', 'goals', 'feedback'],
+        'manager': ['team', 'teamAnalytics', 'feedback']
+    };
+    
+    const userType = user?.type || 'employee';
+    const permitted = allowedSections[userType] || allowedSections['employee'];
+    
+    // Verificar se o usuário tem permissão para acessar essa seção
+    if (!permitted.includes(sectionName)) {
+        console.warn(`❌ Acesso negado à seção: ${sectionName} para usuário tipo: ${userType}`);
+        return;
+    }
+    
     document.querySelectorAll('.section').forEach(section => {
         section.classList.add('hidden');
     });
@@ -213,6 +286,7 @@ function showSection(sectionName) {
     const targetSection = document.getElementById(sectionName + 'Section');
     if (targetSection) {
         targetSection.classList.remove('hidden');
+        targetSection.style.display = 'block';
         switch(sectionName) {
             case 'dashboard': 
                 if (user.type !== 'manager') loadDashboard(); 
@@ -231,6 +305,9 @@ function showSection(sectionName) {
                 break;
             case 'teamAnalytics': 
                 if (user.type === 'manager') loadTeamAnalytics(); 
+                break;
+            case 'checkin':
+                loadCheckin();
                 break;
         }
     }
@@ -562,11 +639,15 @@ function createWeeklyChart(emotions) {
                 borderWidth: 3,
                 tension: 0.4,
                 fill: true,
+                spanGaps: true,
                 pointBackgroundColor: '#2563eb',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
-                pointRadius: 4,
-                pointHoverRadius: 6
+                pointRadius: 6,
+                pointHoverRadius: 8,
+                segment: {
+                    borderColor: ctx => ctx.p0DataIndex !== ctx.p1DataIndex - 1 ? 'rgba(37, 99, 235, 0)' : '#2563eb'
+                }
             }]
         },
         options: {
@@ -710,26 +791,69 @@ async function loadGoals() {
         const goals = await response.json();
 
         const container = document.getElementById('goalsList');
+        const completedContainer = document.getElementById('completedGoalsList');
         if (!container) return;
 
-        if (goals.length === 0) {
+        // Separate active and completed goals
+        const activeGoals = goals.filter(g => g.progress < 100);
+        const completedGoals = goals.filter(g => g.progress === 100);
+
+        if (activeGoals.length === 0 && completedGoals.length === 0) {
             container.innerHTML = '<div class="no-data"><i class="fas fa-bullseye"></i><p>Nenhuma meta definida</p></div>';
+            if (completedContainer) completedContainer.innerHTML = '';
             return;
         }
 
-        container.innerHTML = goals.map(goal => `
-            <div class="goal-item">
-                <div class="goal-title">${escapeHtml(goal.objective)}</div>
-                <div class="goal-progress">
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${goal.progress}%"></div>
+        // Display active goals
+        if (activeGoals.length === 0) {
+            container.innerHTML = '<div class="no-data"><i class="fas fa-check-circle"></i><p>Todas as metas foram concluídas!</p></div>';
+        } else {
+            container.innerHTML = activeGoals.map(goal => `
+                <div class="goal-item">
+                    <div class="goal-header">
+                        <div class="goal-title">${escapeHtml(goal.objective)}</div>
+                        <button class="delete-btn" onclick="deleteGoal(${goal.id})" title="Remover meta" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px;">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
-                    <div class="progress-text">${goal.progress}%</div>
+                    <div class="goal-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${goal.progress}%"></div>
+                        </div>
+                        <div class="progress-text">${goal.progress}%</div>
+                    </div>
+                    <input type="range" min="0" max="100" value="${goal.progress}"
+                           onchange="updateGoalProgress(${goal.id}, this.value)" style="width: 100%; margin-top: 8px;">
                 </div>
-                <input type="range" min="0" max="100" value="${goal.progress}"
-                       onchange="updateGoalProgress(${goal.id}, this.value)">
-            </div>
-        `).join('');
+            `).join('');
+        }
+
+        // Display completed goals in separate section
+        const completedCard = document.getElementById('completedGoalsCard');
+        if (completedContainer) {
+            if (completedGoals.length === 0) {
+                completedContainer.innerHTML = '';
+                if (completedCard) completedCard.style.display = 'none';
+            } else {
+                if (completedCard) completedCard.style.display = 'block';
+                completedContainer.innerHTML = completedGoals.map(goal => `
+                    <div class="goal-item completed" style="opacity: 0.7;">
+                        <div class="goal-header">
+                            <div class="goal-title"><i class="fas fa-check" style="color: #10b981; margin-right: 8px;"></i>${escapeHtml(goal.objective)}</div>
+                            <button class="delete-btn" onclick="deleteGoal(${goal.id})" title="Remover meta" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px;">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="goal-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 100%"></div>
+                            </div>
+                            <div class="progress-text">100%</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
     } catch (error) {
         console.error('Erro ao carregar metas:', error);
     }
@@ -774,6 +898,29 @@ async function updateGoalProgress(id, progress) {
         loadGoals();
     } catch (error) {
         showAlert('Erro ao atualizar progresso', 'danger');
+    }
+}
+
+async function deleteGoal(id) {
+    if (!confirm('Tem certeza que deseja remover esta meta?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/goals/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            showAlert('Meta removida com sucesso!', 'success');
+            loadGoals();
+            loadDashboard();
+            return;
+        }
+
+        throw new Error('Erro ao remover');
+    } catch (error) {
+        console.error('Erro ao deletar meta:', error);
+        showAlert('Erro ao remover meta', 'danger');
     }
 }
 
@@ -1169,6 +1316,8 @@ async function loadFeedback() {
         feedbackItems = await response.json();
         updateFeedbackStats(feedbackItems);
         renderFeedbackList();
+        // Anexar handlers apenas uma vez
+        attachFeedbackHandlers();
     } catch (error) {
         console.error('Erro ao carregar feedback:', error);
         showAlert('Erro ao carregar feedback', 'danger');
@@ -1249,34 +1398,45 @@ function renderFeedbackList() {
                 </div>
             </div>`;
     }).join('');
-    attachFeedbackHandlers();
 }
 
 function attachFeedbackHandlers() {
-    document.querySelectorAll('.btn-mark-read').forEach(button => {
-        button.addEventListener('click', async () => {
+    const container = document.getElementById('feedbackList');
+    if (!container) return;
+    
+    // Evitar múltiplos listeners no mesmo container
+    if (container._feedbackHandlersAttached) return;
+    
+    // Usar event delegation para evitar duplicação de listeners
+    container.addEventListener('click', async (e) => {
+        // Botão Marcar como lido/não lido
+        if (e.target.closest('.btn-mark-read')) {
+            const button = e.target.closest('.btn-mark-read');
             const feedbackId = button.getAttribute('data-id');
             const newStatus = button.getAttribute('data-status');
             await setFeedbackStatus(feedbackId, newStatus);
             await loadFeedback();
-        });
-    });
-    document.querySelectorAll('.btn-respond').forEach(button => {
-        button.addEventListener('click', () => {
+        }
+        
+        // Botão Responder
+        if (e.target.closest('.btn-respond')) {
+            const button = e.target.closest('.btn-respond');
             const feedbackId = button.getAttribute('data-id');
             const form = document.getElementById(`responseForm-${feedbackId}`);
             if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
-        });
-    });
-    document.querySelectorAll('.btn-cancel-response').forEach(button => {
-        button.addEventListener('click', () => {
+        }
+        
+        // Botão Cancelar resposta
+        if (e.target.closest('.btn-cancel-response')) {
+            const button = e.target.closest('.btn-cancel-response');
             const feedbackId = button.getAttribute('data-id');
             const form = document.getElementById(`responseForm-${feedbackId}`);
             if (form) form.style.display = 'none';
-        });
-    });
-    document.querySelectorAll('.btn-send-response').forEach(button => {
-        button.addEventListener('click', async () => {
+        }
+        
+        // Botão Enviar resposta
+        if (e.target.closest('.btn-send-response')) {
+            const button = e.target.closest('.btn-send-response');
             const feedbackId = button.getAttribute('data-id');
             const textarea = document.getElementById(`responseText-${feedbackId}`);
             const responseText = textarea?.value || '';
@@ -1286,9 +1446,11 @@ function attachFeedbackHandlers() {
             }
             await respondFeedback(feedbackId, responseText.trim());
             await loadFeedback();
-        });
+        }
     });
-}
+    
+    // Marcar que handlers foram anexados
+    container._feedbackHandlersAttached = true;
 
 async function setFeedbackStatus(id, status) {
     try {
@@ -1355,6 +1517,12 @@ function getMoodScore(mood) {
 }
 
 function formatDate(dateString) {
+    // Parse date string as local date to avoid timezone offset issues
+    const parts = dateString.split('-');
+    if (parts.length === 3) {
+        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
     const date = new Date(dateString);
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
@@ -1372,6 +1540,7 @@ function showAlert(message, type = 'info') {
 
 // Expor funções globalmente
 window.updateGoalProgress = updateGoalProgress;
+window.deleteGoal = deleteGoal;
 window.showMemberDetails = showMemberDetails;
 window.closeModal = closeModal;
 window.editTodayMood = editTodayMood;

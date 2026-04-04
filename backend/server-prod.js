@@ -85,6 +85,16 @@ app.post('/api/login', async (req, res) => {
     });
 });
 
+// Verificar perfil do usuário
+app.get('/api/profile', verifyToken, (req, res) => {
+    db.get('SELECT id, name, email, type FROM users WHERE id = ?', [req.userId], (err, user) => {
+        if (err || !user) {
+            return res.status(401).json({ error: 'Usuário não encontrado' });
+        }
+        res.json({ user });
+    });
+});
+
 // ============ ROTA TEAM-MEMBERS (A QUE ESTÁ FALTANDO) ============
 app.get('/api/team-members', verifyToken, (req, res) => {
     console.log('GET /api/team-members - Usuário:', req.userType);
@@ -181,6 +191,18 @@ app.put('/api/goals/:id', verifyToken, (req, res) => {
         function(err) {
             if (err) return res.status(500).json({ error: 'Erro ao atualizar' });
             res.json({ message: 'Atualizado' });
+        }
+    );
+});
+
+app.delete('/api/goals/:id', verifyToken, (req, res) => {
+    db.run(
+        'DELETE FROM goals WHERE id = ? AND user_id = ?',
+        [req.params.id, req.userId],
+        function(err) {
+            if (err) return res.status(500).json({ error: 'Erro ao deletar' });
+            if (this.changes === 0) return res.status(404).json({ error: 'Meta não encontrada' });
+            res.json({ message: 'Meta removida com sucesso' });
         }
     );
 });
