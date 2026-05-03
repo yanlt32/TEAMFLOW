@@ -48,8 +48,37 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     content TEXT NOT NULL,
-    date TEXT NOT NULL
+    date TEXT NOT NULL,
+    response TEXT,
+    status TEXT DEFAULT 'unread'
   )`);
+
+  db.all(`PRAGMA table_info(feedback)`, (err, columns) => {
+    if (err) {
+      console.error('Erro ao verificar esquema de feedback:', err);
+      return;
+    }
+
+    const columnNames = columns.map(col => col.name);
+
+    if (!columnNames.includes('response')) {
+      db.run(`ALTER TABLE feedback ADD COLUMN response TEXT`, (alterErr) => {
+        if (alterErr) console.error('Erro ao adicionar coluna response:', alterErr);
+      });
+    }
+
+    if (!columnNames.includes('status')) {
+      db.run(`ALTER TABLE feedback ADD COLUMN status TEXT DEFAULT 'unread'`, (alterErr) => {
+        if (alterErr) {
+          console.error('Erro ao adicionar coluna status:', alterErr);
+        } else {
+          db.run(`UPDATE feedback SET status = 'unread' WHERE status IS NULL`, (updateErr) => {
+            if (updateErr) console.error('Erro ao atualizar status existente:', updateErr);
+          });
+        }
+      });
+    }
+  });
 
   console.log('Database initialized successfully');
 });

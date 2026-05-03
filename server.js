@@ -459,7 +459,7 @@ app.put('/api/goals/:id', verifyToken, (req, res) => {
 // Feedback routes (anonymous)
 app.get('/api/feedback', verifyToken, requireRole(['manager']), (req, res) => {
     db.all(`
-        SELECT id, content, date
+        SELECT id, content, date, response, status
         FROM feedback
         ORDER BY date DESC
     `, [], (err, rows) => {
@@ -486,8 +486,8 @@ app.post('/api/feedback', (req, res) => {
     const date = new Date().toISOString();
 
     db.run(`
-        INSERT INTO feedback (content, date)
-        VALUES (?, ?)
+        INSERT INTO feedback (content, date, status)
+        VALUES (?, ?, 'unread')
     `, [content, date], function(err) {
         if (err) {
             return res.status(500).json({
@@ -499,13 +499,14 @@ app.post('/api/feedback', (req, res) => {
         res.status(201).json({
             id: this.lastID,
             content,
-            date
+            date,
+            status: 'unread'
         });
     });
 });
 
 app.get('/api/feedback/user', verifyToken, (req, res) => {
-    db.all('SELECT * FROM feedback WHERE response IS NOT NULL ORDER BY date DESC', [], (err, rows) => {
+    db.all('SELECT id, content, date, response, status FROM feedback WHERE response IS NOT NULL ORDER BY date DESC', [], (err, rows) => {
         if (err) {
             return res.status(500).json({
                 error: 'Erro ao buscar respostas',
