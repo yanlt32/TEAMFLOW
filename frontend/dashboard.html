@@ -146,6 +146,39 @@
                         <div id="recentActivity" class="emotion-timeline"></div>
                     </div>
                 </div>
+
+                <div id="mindQuestCard" class="card game-card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-fire"></i> Missão MindQuest</h3>
+                        <p class="card-subtitle">Desafio rápido do dia para ganhar XP e subir de nível.</p>
+                    </div>
+                    <div class="card-content">
+                        <div class="game-summary">
+                            <div class="game-metric">
+                                <div class="metric-value" id="gamePoints">0</div>
+                                <div class="metric-label">XP</div>
+                            </div>
+                            <div class="game-metric">
+                                <div class="metric-value" id="gameLevel">Bronze</div>
+                                <div class="metric-label">Nível</div>
+                            </div>
+                            <div class="game-metric">
+                                <div class="metric-value" id="gameStreak">0</div>
+                                <div class="metric-label">Missões seguidas</div>
+                            </div>
+                        </div>
+
+                        <div id="gameChallenge" class="game-challenge">
+                            <div id="gameStatus" class="game-status"></div>
+                            <div id="gameQuestion" class="game-question"></div>
+                            <div id="gameOptions" class="game-options"></div>
+                            <div id="gameResult" class="game-result hidden"></div>
+                            <button type="button" id="submitGameAnswer" class="btn btn-primary btn-full hidden">
+                                <i class="fas fa-check-circle"></i> Enviar resposta
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Check-in Section (Employee) -->

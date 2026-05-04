@@ -13,6 +13,554 @@ let moodChartInstance = null;
 let teamMoodChartInstance = null;
 let teamEvolutionChartInstance = null;
 
+// ========== MINDQUEST CONFIG ==========
+const GAME_QUESTIONS = [
+    {
+        id: 1,
+        category: 'Bem-estar',
+        icon: '🧘',
+        question: 'Qual hábito ajuda mais a reduzir o estresse no trabalho?',
+        options: [
+            'Pausar e respirar fundo quando necessário',
+            'Responder tudo imediatamente',
+            'Trabalhar sem intervalos',
+            'Ignorar notificações até o fim do dia'
+        ],
+        answer: 0,
+        explanation: 'Pausas conscientes com respiração profunda ativam o sistema nervoso parassimpático, reduzindo cortisol e restaurando o foco.'
+    },
+    {
+        id: 2,
+        category: 'Produtividade',
+        icon: '🎯',
+        question: 'O que mais contribui para o bem-estar emocional no trabalho diário?',
+        options: [
+            'Organizar pequenas metas e fazer pausas regulares',
+            'Pular refeições para terminar mais rápido',
+            'Nunca compartilhar como se sente',
+            'Fazer várias tarefas ao mesmo tempo sem parar'
+        ],
+        answer: 0,
+        explanation: 'Metas pequenas geram sensação de progresso e satisfação. Pausas regulares recuperam energia cognitiva e emocional.'
+    },
+    {
+        id: 3,
+        category: 'Autocuidado',
+        icon: '💚',
+        question: 'Qual atitude demonstra melhor autocuidado emocional?',
+        options: [
+            'Reservar momentos de descanso durante o dia',
+            'Trabalhar até tarde todos os dias',
+            'Responder com raiva quando estressado',
+            'Evitar pedir ajuda a qualquer custo'
+        ],
+        answer: 0,
+        explanation: 'Reconhecer a necessidade de descanso é um sinal de maturidade emocional e fortalece a resiliência a longo prazo.'
+    },
+    {
+        id: 4,
+        category: 'Energia',
+        icon: '⚡',
+        question: 'Qual prática mais eficaz para manter energia e foco ao longo do dia?',
+        options: [
+            'Fazer pausas curtas e se hidratar regularmente',
+            'Ficar sentado na cadeira o dia inteiro sem parar',
+            'Checar redes sociais constantemente',
+            'Deixar tarefas acumularem para o final do dia'
+        ],
+        answer: 0,
+        explanation: 'A hidratação adequada e micro-pausas de 5 minutos a cada hora são comprovadamente eficazes para manter performance cognitiva.'
+    },
+    {
+        id: 5,
+        category: 'Inteligência Emocional',
+        icon: '🧠',
+        question: 'Qual sinal mais claro de que você está progredindo emocionalmente?',
+        options: [
+            'Conseguir reconhecer e ajustar seu estado emocional',
+            'Ignorar seus sentimentos para parecer mais forte',
+            'Trabalhar sem nenhum descanso como prioridade',
+            'Reagir impulsivamente a qualquer provocação'
+        ],
+        answer: 0,
+        explanation: 'A regulação emocional — perceber, nomear e ajustar emoções — é o coração da inteligência emocional e pilar do bem-estar.'
+    },
+    {
+        id: 6,
+        category: 'Relacionamentos',
+        icon: '🤝',
+        question: 'Como a comunicação aberta no trabalho impacta o bem-estar da equipe?',
+        options: [
+            'Reduz conflitos e aumenta a confiança coletiva',
+            'Gera mais reuniões desnecessárias',
+            'Aumenta a pressão sobre as pessoas',
+            'Não tem impacto significativo'
+        ],
+        answer: 0,
+        explanation: 'Times com comunicação aberta têm menos desgaste emocional, mais psicologicagical safety e maior engajamento.'
+    },
+    {
+        id: 7,
+        category: 'Mindfulness',
+        icon: '🌿',
+        question: 'O que é mindfulness no contexto do ambiente de trabalho?',
+        options: [
+            'Estar presente e consciente no momento atual',
+            'Fazer múltiplas tarefas ao mesmo tempo',
+            'Ignorar distrações ao custo de tudo',
+            'Meditar por horas antes de começar o trabalho'
+        ],
+        answer: 0,
+        explanation: 'Mindfulness é cultivar atenção plena ao momento presente — pode ser praticado em segundos e reduz estresse imediatamente.'
+    },
+    {
+        id: 8,
+        category: 'Resiliência',
+        icon: '💪',
+        question: 'Qual é a melhor resposta ao cometer um erro no trabalho?',
+        options: [
+            'Reconhecer, aprender e seguir em frente',
+            'Esconder o erro para ninguém saber',
+            'Culpar outros pela situação',
+            'Desistir da tarefa para evitar mais erros'
+        ],
+        answer: 0,
+        explanation: 'A resiliência se constrói na capacidade de se recuperar de erros — quem aprende com falhas evolui mais rápido e com mais saúde emocional.'
+    },
+    {
+        id: 9,
+        category: 'Limites',
+        icon: '🔒',
+        question: 'Por que estabelecer limites saudáveis no trabalho é importante?',
+        options: [
+            'Previne o burnout e protege energia para o que importa',
+            'Demonstra que você é menos comprometido',
+            'Impede você de crescer na carreira',
+            'Não é necessário se você gosta do trabalho'
+        ],
+        answer: 0,
+        explanation: 'Limites saudáveis não são fraqueza — são a base da sustentabilidade profissional. Previnem esgotamento e aumentam qualidade de entrega.'
+    },
+    {
+        id: 10,
+        category: 'Gratidão',
+        icon: '✨',
+        question: 'Como praticar gratidão impacta a saúde mental no trabalho?',
+        options: [
+            'Aumenta satisfação, motivação e reduz estresse',
+            'Faz você ignorar problemas reais',
+            'É ineficaz em ambiente corporativo',
+            'Só funciona em contextos pessoais'
+        ],
+        answer: 0,
+        explanation: 'Pesquisas mostram que 3 minutos de gratidão diária aumentam dopamina e serotonina, melhorando humor e resiliência.'
+    }
+];
+
+const LEVELS = [
+    { name: 'Bronze',   min: 0,   max: 99,   color: 'bronze',   emoji: '🥉' },
+    { name: 'Prata',    min: 100, max: 249,  color: 'prata',    emoji: '🥈' },
+    { name: 'Ouro',     min: 250, max: 499,  color: 'ouro',     emoji: '🥇' },
+    { name: 'Platina',  min: 500, max: 999,  color: 'platina',  emoji: '💎' },
+    { name: 'Diamante', min: 1000,max: 99999,color: 'diamante', emoji: '💠' }
+];
+
+const GAME_XP_REWARD      = 30;
+const GAME_XP_WRONG       = 0;
+const GAME_STREAK_BONUS   = 10; // XP extra por streak >= 3
+
+let gameState = null;
+
+function getGameStorageKey() {
+    return `mindtrackGame_${user?.id}`;
+}
+
+function getTodayDate() {
+    return new Date().toISOString().split('T')[0];
+}
+
+function getYesterdayDate() {
+    return new Date(Date.now() - 86400000).toISOString().split('T')[0];
+}
+
+function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const chr = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + chr;
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+function getLevelInfo(points) {
+    for (let i = LEVELS.length - 1; i >= 0; i--) {
+        if (points >= LEVELS[i].min) return LEVELS[i];
+    }
+    return LEVELS[0];
+}
+
+function getNextLevel(points) {
+    const current = getLevelInfo(points);
+    const idx = LEVELS.findIndex(l => l.name === current.name);
+    return LEVELS[idx + 1] || null;
+}
+
+function chooseDailyChallenge() {
+    const today = getTodayDate();
+    const index = hashString(`${user?.id || 'u'}-${today}`) % GAME_QUESTIONS.length;
+    return { ...GAME_QUESTIONS[index], date: today };
+}
+
+function loadUserGame() {
+    try {
+        gameState = JSON.parse(localStorage.getItem(getGameStorageKey()));
+    } catch (e) {
+        gameState = null;
+    }
+
+    const today = getTodayDate();
+
+    if (!gameState) {
+        gameState = {
+            points: 0,
+            streak: 0,
+            lastCompleted: null,
+            totalMissions: 0,
+            dailyChallenge: chooseDailyChallenge(),
+            selectedAnswer: null,
+            completedToday: false,
+            wrongAttempts: 0,
+            lastAnswerCorrect: null
+        };
+    } else {
+        // Novo dia → reset daily state
+        if (!gameState.dailyChallenge || gameState.dailyChallenge.date !== today) {
+            // Verificar quebra de streak (skip de mais de 1 dia)
+            if (gameState.lastCompleted && gameState.lastCompleted !== getYesterdayDate()) {
+                gameState.streak = 0;
+            }
+            gameState.dailyChallenge = chooseDailyChallenge();
+            gameState.selectedAnswer = null;
+            gameState.completedToday = false;
+            gameState.wrongAttempts = 0;
+            gameState.lastAnswerCorrect = null;
+        }
+        // Garantir campos existem
+        if (!gameState.totalMissions) gameState.totalMissions = 0;
+        if (!gameState.wrongAttempts) gameState.wrongAttempts = 0;
+    }
+
+    saveGameState();
+    renderMindQuest();
+    setupGameListeners();
+}
+
+function saveGameState() {
+    localStorage.setItem(getGameStorageKey(), JSON.stringify(gameState));
+}
+
+// ========== RENDER PRINCIPAL ==========
+function renderMindQuest() {
+    const card = document.getElementById('mindQuestCard');
+    if (!card) return;
+
+    const level     = getLevelInfo(gameState.points);
+    const nextLevel = getNextLevel(gameState.points);
+    const xpInLevel = gameState.points - level.min;
+    const xpRange   = (level.max - level.min) + 1;
+    const xpPct     = Math.min(100, Math.round((xpInLevel / xpRange) * 100));
+
+    const streakBonus = gameState.streak >= 3 ? GAME_STREAK_BONUS : 0;
+    const totalReward = GAME_XP_REWARD + streakBonus;
+
+    // Montar fires de streak (máx 7)
+    const maxFires = 7;
+    const fires = Array.from({ length: maxFires }, (_, i) =>
+        `<span class="mq-streak-fire ${i < gameState.streak ? 'active' : ''}">🔥</span>`
+    ).join('');
+
+    // Header sempre igual
+    card.innerHTML = `
+        <div class="mq-card" style="margin-bottom:0;">
+            <div class="mq-header">
+                <div class="mq-title-row">
+                    <div class="mq-icon">🎮</div>
+                    <div>
+                        <div class="mq-title">MindQuest</div>
+                        <div class="mq-subtitle">Desafio diário de bem-estar</div>
+                    </div>
+                </div>
+
+                <div class="mq-stats-row">
+                    <div class="mq-stat">
+                        <span class="mq-stat-value" id="mqPoints">${gameState.points}</span>
+                        <span class="mq-stat-label">XP Total</span>
+                        <div class="mq-level-badge mq-level-${level.name.toLowerCase()}" style="margin-top:6px;">
+                            ${level.emoji} ${level.name}
+                        </div>
+                    </div>
+                    <div class="mq-stat">
+                        <span class="mq-stat-value" id="mqStreak">${gameState.streak}</span>
+                        <span class="mq-stat-label">Sequência</span>
+                        <div class="mq-streak-row" style="justify-content:center;margin-top:6px;">${fires}</div>
+                    </div>
+                    <div class="mq-stat">
+                        <span class="mq-stat-value">${gameState.totalMissions || 0}</span>
+                        <span class="mq-stat-label">Missões</span>
+                        <div style="margin-top:6px;font-size:10px;color:rgba(255,255,255,0.6);">
+                            🏆 Concluídas
+                        </div>
+                    </div>
+                </div>
+
+                ${nextLevel ? `
+                <div class="mq-xp-bar-wrap" style="margin-top:14px;">
+                    <div class="mq-xp-bar-label">
+                        <span>Progresso para ${nextLevel.emoji} ${nextLevel.name}</span>
+                        <span>${xpPct}%</span>
+                    </div>
+                    <div class="mq-xp-bar-bg">
+                        <div class="mq-xp-bar-fill" style="width:${xpPct}%"></div>
+                    </div>
+                </div>` : `
+                <div style="margin-top:14px;text-align:center;font-size:12px;color:rgba(255,255,255,0.7);">
+                    💠 Nível máximo atingido! Parabéns!
+                </div>`}
+            </div>
+
+            <div class="mq-body" id="mqBody">
+                ${gameState.completedToday ? renderDoneState(streakBonus) : renderActiveState(totalReward)}
+            </div>
+        </div>
+    `;
+}
+
+function renderDoneState(streakBonus) {
+    return `
+        <div class="mq-done-state">
+            <div class="mq-done-icon">✅</div>
+            <div class="mq-done-title">Missão concluída hoje!</div>
+            <div class="mq-done-msg">
+                Você já garantiu seus pontos do dia. Continue amanhã para manter sua sequência.
+            </div>
+            <div class="mq-reward-pill">
+                ⚡ +${GAME_XP_REWARD + (gameState.streak >= 3 ? GAME_STREAK_BONUS : 0)} XP garantidos hoje
+            </div>
+            <div class="mq-next-badge">
+                🌙 Próxima missão disponível amanhã
+            </div>
+        </div>
+    `;
+}
+
+function renderActiveState(totalReward) {
+    const q = gameState.dailyChallenge;
+    const letters = ['A', 'B', 'C', 'D'];
+    const streakBonus = gameState.streak >= 3 ? GAME_STREAK_BONUS : 0;
+
+    const optionsHtml = q.options.map((opt, i) => {
+        let classes = 'mq-option';
+        if (gameState.lastAnswerCorrect !== null) {
+            if (i === q.answer) classes += ' correct';
+            else if (i === gameState.selectedAnswer && !gameState.lastAnswerCorrect) classes += ' wrong';
+            else classes += ' disabled';
+        } else if (gameState.selectedAnswer === i) {
+            classes += ' selected';
+        }
+        return `
+            <button type="button" class="${classes}" data-index="${i}">
+                <span class="mq-option-letter">${letters[i]}</span>
+                <span>${opt}</span>
+            </button>
+        `;
+    }).join('');
+
+    const feedbackHtml = gameState.lastAnswerCorrect === true
+        ? `<div class="mq-feedback-correct">
+               <span class="mq-feedback-icon">🎉</span>
+               <div class="mq-feedback-text">
+                   <strong>Resposta correta! +${totalReward} XP ${gameState.streak >= 3 ? `(+${GAME_STREAK_BONUS} bônus streak!)` : ''}</strong>
+                   ${q.explanation}
+               </div>
+           </div>`
+        : gameState.lastAnswerCorrect === false
+        ? `<div class="mq-feedback-wrong">
+               <span class="mq-feedback-icon">💡</span>
+               <div class="mq-feedback-text">
+                   <strong>Quase lá! Tente novamente.</strong>
+                   Releia as opções com calma — a resposta certa ainda está disponível.
+               </div>
+           </div>`
+        : '';
+
+    const attemptsLeft = 3 - (gameState.wrongAttempts || 0);
+    const attemptsText = gameState.wrongAttempts > 0
+        ? `<span class="mq-attempts-info">⚠️ ${attemptsLeft} tentativa${attemptsLeft !== 1 ? 's' : ''} restante${attemptsLeft !== 1 ? 's' : ''}</span>`
+        : `<span class="mq-attempts-info">💬 Selecione a melhor resposta</span>`;
+
+    const btnDisabled = gameState.selectedAnswer === null || gameState.lastAnswerCorrect !== null ? 'disabled' : '';
+    const btnText = gameState.lastAnswerCorrect === null
+        ? `⚡ Confirmar (+${totalReward} XP)`
+        : gameState.lastAnswerCorrect
+        ? '✅ Respondido'
+        : '🔄 Tente outra opção';
+
+    return `
+        <div class="mq-active-state">
+            <div class="mq-category-tag">
+                ${q.icon} ${q.category}
+                ${gameState.streak >= 3 ? `&nbsp;·&nbsp;🔥 Bônus de sequência: +${GAME_STREAK_BONUS} XP` : ''}
+            </div>
+
+            <div class="mq-question-box">${q.question}</div>
+
+            ${feedbackHtml}
+
+            <div class="mq-options-grid" id="mqOptionsGrid">
+                ${optionsHtml}
+            </div>
+
+            <div class="mq-footer-row">
+                ${attemptsText}
+                <button type="button"
+                    class="mq-submit-btn"
+                    id="mqSubmitBtn"
+                    ${gameState.lastAnswerCorrect === true || gameState.lastAnswerCorrect === false && gameState.selectedAnswer === null ? 'disabled' : ''}
+                    ${gameState.selectedAnswer === null && gameState.lastAnswerCorrect === null ? 'disabled' : ''}>
+                    ${btnText}
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// ========== EVENT LISTENERS ==========
+function setupGameListeners() {
+    const card = document.getElementById('mindQuestCard');
+    if (!card || card._mqListenerSet) return;
+    card._mqListenerSet = true;
+
+    card.addEventListener('click', e => {
+        // Clique em opção
+        const optBtn = e.target.closest('.mq-option');
+        if (optBtn && !optBtn.classList.contains('correct') && !optBtn.classList.contains('wrong') && !optBtn.classList.contains('disabled')) {
+            if (gameState.completedToday || gameState.lastAnswerCorrect === true) return;
+            gameState.selectedAnswer = Number(optBtn.dataset.index);
+            gameState.lastAnswerCorrect = null;
+            saveGameState();
+            updateOptionsUI();
+            updateSubmitBtn();
+        }
+
+        // Clique em confirmar
+        if (e.target.closest('#mqSubmitBtn')) {
+            submitGameAnswer();
+        }
+    });
+}
+
+function updateOptionsUI() {
+    const grid = document.getElementById('mqOptionsGrid');
+    if (!grid) return;
+
+    grid.querySelectorAll('.mq-option').forEach((btn, i) => {
+        btn.classList.remove('selected', 'correct', 'wrong', 'disabled');
+        if (gameState.lastAnswerCorrect !== null) {
+            if (i === gameState.dailyChallenge.answer) btn.classList.add('correct');
+            else if (i === gameState.selectedAnswer && !gameState.lastAnswerCorrect) btn.classList.add('wrong');
+            else btn.classList.add('disabled');
+        } else if (gameState.selectedAnswer === i) {
+            btn.classList.add('selected');
+        }
+    });
+}
+
+function updateSubmitBtn() {
+    const btn = document.getElementById('mqSubmitBtn');
+    if (!btn) return;
+
+    const streakBonus  = gameState.streak >= 3 ? GAME_STREAK_BONUS : 0;
+    const totalReward  = GAME_XP_REWARD + streakBonus;
+
+    if (gameState.lastAnswerCorrect === true) {
+        btn.textContent = '✅ Respondido';
+        btn.disabled = true;
+    } else if (gameState.selectedAnswer !== null) {
+        btn.innerHTML = `⚡ Confirmar (+${totalReward} XP)`;
+        btn.disabled = false;
+    } else {
+        btn.innerHTML = `⚡ Confirmar (+${totalReward} XP)`;
+        btn.disabled = true;
+    }
+}
+
+// ========== SUBMIT ==========
+function submitGameAnswer() {
+    if (gameState.completedToday || gameState.selectedAnswer === null) return;
+
+    const correct = gameState.selectedAnswer === gameState.dailyChallenge.answer;
+
+    if (!correct) {
+        gameState.wrongAttempts = (gameState.wrongAttempts || 0) + 1;
+        gameState.lastAnswerCorrect = false;
+        saveGameState();
+
+        // Re-render apenas o body
+        const body = document.getElementById('mqBody');
+        if (body) {
+            const streakBonus = gameState.streak >= 3 ? GAME_STREAK_BONUS : 0;
+            body.innerHTML = renderActiveState(GAME_XP_REWARD + streakBonus);
+        }
+        return;
+    }
+
+    // Correto!
+    const today     = getTodayDate();
+    const yesterday = getYesterdayDate();
+
+    const streakBonus = gameState.streak >= 3 ? GAME_STREAK_BONUS : 0;
+    const xpEarned    = GAME_XP_REWARD + streakBonus;
+
+    gameState.points       += xpEarned;
+    gameState.totalMissions = (gameState.totalMissions || 0) + 1;
+    gameState.lastAnswerCorrect = true;
+
+    // Streak
+    if (gameState.lastCompleted === yesterday) {
+        gameState.streak += 1;
+    } else if (gameState.lastCompleted !== today) {
+        gameState.streak = 1;
+    }
+
+    gameState.lastCompleted = today;
+    gameState.completedToday = true;
+    saveGameState();
+
+    // Mostrar toast de XP
+    showXpToast(xpEarned, gameState.streak);
+
+    // Re-render completo após pequeno delay (para feedback visual)
+    setTimeout(() => renderMindQuest(), 1200);
+}
+
+function showXpToast(xp, streak) {
+    const existing = document.getElementById('mqXpToast');
+    if (existing) existing.remove();
+
+    const streakMsg = streak >= 3 ? ` 🔥 Streak x${streak}!` : '';
+    const toast = document.createElement('div');
+    toast.id = 'mqXpToast';
+    toast.className = 'mq-xp-toast';
+    toast.innerHTML = `⚡ +${xp} XP${streakMsg}`;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'mq-toast-out 0.4s ease forwards';
+        setTimeout(() => toast.remove(), 400);
+    }, 2800);
+}
+
 // ============ INICIALIZAÇÃO ============
 document.addEventListener('DOMContentLoaded', async function () {
     token = localStorage.getItem('token');
@@ -117,6 +665,7 @@ function initializeApp() {
         }
 
         loadDashboard();
+        loadUserGame();
         checkTodayMood();
     }
 }
@@ -1162,7 +1711,7 @@ async function showMemberDetails(memberId) {
                             <div class="card-content">
                                 <div class="emotion-timeline">
                                     ${member.emotions.length > 0
-                ? member.emotions.map(e => `
+                                        ? member.emotions.map(e => `
                                             <div class="emotion-entry">
                                                 <div class="emotion-date">${formatDate(e.date)}</div>
                                                 <div class="emotion-mood">
@@ -1171,7 +1720,7 @@ async function showMemberDetails(memberId) {
                                                 </div>
                                                 ${e.comment ? `<div class="emotion-comment">${escapeHtml(e.comment)}</div>` : ''}
                                             </div>`).join('')
-                : '<div class="no-data">Nenhum registro emocional</div>'}
+                                        : '<div class="no-data">Nenhum registro emocional</div>'}
                                 </div>
                             </div>
                         </div>
@@ -1180,7 +1729,7 @@ async function showMemberDetails(memberId) {
                             <div class="card-content">
                                 <div class="goals-list">
                                     ${member.goals.length > 0
-                ? member.goals.map(g => `
+                                        ? member.goals.map(g => `
                                             <div class="goal-item">
                                                 <div class="goal-title">${escapeHtml(g.objective)}</div>
                                                 <div class="goal-progress">
@@ -1188,7 +1737,7 @@ async function showMemberDetails(memberId) {
                                                     <div class="progress-text">${g.progress}%</div>
                                                 </div>
                                             </div>`).join('')
-                : '<div class="no-data">Nenhuma meta definida</div>'}
+                                        : '<div class="no-data">Nenhuma meta definida</div>'}
                                 </div>
                             </div>
                         </div>
@@ -1406,11 +1955,11 @@ function renderFeedbackList() {
                 </div>
                 <div class="feedback-content">${escapeHtml(item.content)}</div>
                 ${item.response
-                ? `<div class="feedback-response">
-                        <strong><i class="fas fa-reply"></i> Resposta:</strong>
-                        <div style="margin-top:8px;padding:8px;background:#f0fdf4;border-radius:8px;">${escapeHtml(item.response)}</div>
-                   </div>`
-                : ''}
+                    ? `<div class="feedback-response">
+                            <strong><i class="fas fa-reply"></i> Resposta:</strong>
+                            <div style="margin-top:8px;padding:8px;background:#f0fdf4;border-radius:8px;">${escapeHtml(item.response)}</div>
+                       </div>`
+                    : ''}
                 <div class="feedback-actions">
                     <button class="btn-feedback-action btn-mark-read" data-id="${item.id}" data-status="${itemStatus === 'unread' ? 'read' : 'unread'}">
                         <i class="fas fa-envelope-open"></i> ${itemStatus === 'unread' ? 'Marcar como lido' : 'Marcar como não lido'}
@@ -1440,7 +1989,6 @@ function attachFeedbackHandlers() {
             const feedbackId = button.getAttribute('data-id');
             const newStatus = button.getAttribute('data-status');
             await setFeedbackStatus(feedbackId, newStatus);
-            // Atualizar localmente sem reload completo
             const item = feedbackItems.find(f => String(f.id) === String(feedbackId));
             if (item) item.status = newStatus;
             updateFeedbackStats(feedbackItems);
@@ -1468,7 +2016,6 @@ function attachFeedbackHandlers() {
                 return;
             }
             await respondFeedback(feedbackId, responseText);
-            // Atualizar localmente sem reload completo
             const item = feedbackItems.find(f => String(f.id) === String(feedbackId));
             if (item) { item.response = responseText; item.status = 'responded'; }
             updateFeedbackStats(feedbackItems);

@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     setupPasswordToggle();
     setupFormValidation();
-    
+
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);

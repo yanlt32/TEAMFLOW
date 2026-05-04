@@ -86,14 +86,12 @@ async function seedDatabase() {
 
     } catch (error) {
         console.error('❌ Erro durante o seed:', error);
-    } finally {
-        db.close();
     }
 }
 
 // Run seed if called directly
 if (require.main === module) {
-    seedDatabase();
+    seedDatabase().finally(() => db.close());
 }
 
 module.exports = seedDatabase;

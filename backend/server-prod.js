@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 const fs = require('fs');
 const db = require('./database');
+const seedDatabase = require('./seed');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -364,15 +365,31 @@ app.get('*', (req, res) => {
 });
 
 // ============ INICIAR SERVIDOR ============
-app.listen(PORT, () => {
-    console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`📡 API: http://localhost:${PORT}/api`);
-    console.log(`✅ Rotas disponíveis:`);
-    console.log(`   POST /api/login`);
-    console.log(`   GET  /api/team-members`);
-    console.log(`   GET  /api/emotions`);
-    console.log(`   POST /api/emotions`);
-    console.log(`   GET  /api/goals`);
-    console.log(`   GET  /api/feedback`);
-    console.log(`   GET  /api/member/:id\n`);
-});
+(async () => {
+    try {
+        await db._ready;
+
+        const row = await db.getAsync('SELECT COUNT(*) as count FROM users', []);
+        if (!row || row.count === 0) {
+            console.log('🌱 Banco sem usuários detectado; executando seed inicial...');
+            await seedDatabase();
+        } else {
+            console.log(`✅ Banco já tem ${row.count} usuário(s); seed não necessário.`);
+        }
+    } catch (err) {
+        console.error('❌ Falha ao verificar/seed do banco:', err);
+    }
+
+    app.listen(PORT, () => {
+        console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
+        console.log(`📡 API: http://localhost:${PORT}/api`);
+        console.log(`✅ Rotas disponíveis:`);
+        console.log(`   POST /api/login`);
+        console.log(`   GET  /api/team-members`);
+        console.log(`   GET  /api/emotions`);
+        console.log(`   POST /api/emotions`);
+        console.log(`   GET  /api/goals`);
+        console.log(`   GET  /api/feedback`);
+        console.log(`   GET  /api/member/:id\n`);
+    });
+})();
